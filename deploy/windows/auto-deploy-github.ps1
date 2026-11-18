@@ -9,7 +9,8 @@ param (
     [string]$PhpExe = "C:\PHP85\php.exe",
     [string]$Branch = "main",
     [string]$Remote = "origin",
-    [string]$HealthCheckUrl = "http://127.0.0.1:8080/up"
+    [string]$HealthCheckUrl = "http://127.0.0.1:8080/up",
+    [string]$NotificationTaskName = "\ARTSCI-Deployment-Notification"
 )
 
 # 1. Resolve Application Directory
@@ -40,6 +41,11 @@ if (-not (Test-Path $PhpExe)) {
 
 $logFile = Join-Path $AppRoot "storage\logs\auto-deploy.log"
 $lockFile = Join-Path $AppRoot "storage\framework\deploy.lock"
+$script:deploymentHistoryFile = Join-Path $AppRoot "storage\app\private\deployment-events.jsonl"
+$script:notificationTaskName = $NotificationTaskName
+$script:deploymentId = $null
+$script:deploymentCommit = $null
+$script:deploymentStage = "preflight"
 
 function Write-DeployLog {
     param ([string]$Message, [string]$Level = "INFO")
@@ -50,6 +56,92 @@ function Write-DeployLog {
         New-Item -ItemType Directory -Path $logDir -Force | Out-Null
     }
     Add-Content -Path $logFile -Value $logLine -ErrorAction SilentlyContinue
+}
+
+function Write-DeploymentEvent {
+    param (
+        [ValidateSet("running", "succeeded", "failed")]
+        [string]$Status,
+        [string]$Stage,
+        [string]$Message,
+        [string]$ErrorMessage
+    )
+
+    $stream = $null
+
+    try {
+        if (-not $script:deploymentId) {
+            return
+        }
+
+        $historyDirectory = Split-Path $script:deploymentHistoryFile -Parent
+        if (-not (Test-Path -LiteralPath $historyDirectory)) {
+            New-Item -ItemType Directory -Path $historyDirectory -Force | Out-Null
+        }
+
+        $record = [ordered]@{
+            deployment_id = $script:deploymentId
+            timestamp = (Get-Date).ToUniversalTime().ToString("o")
+            status = $Status
+            stage = $Stage
+            commit = $script:deploymentCommit
+            message = $Message
+            error = $ErrorMessage
+        }
+        $line = (ConvertTo-Json -InputObject $record -Compress -Depth 4) + "`n"
+        $encoding = [System.Text.UTF8Encoding]::new($false)
+        $bytes = $encoding.GetBytes($line)
+        $stream = [System.IO.File]::Open(
+            $script:deploymentHistoryFile,
+            [System.IO.FileMode]::Append,
+            [System.IO.FileAccess]::Write,
+            [System.IO.FileShare]::ReadWrite
+        )
+
+        $stream.Write($bytes, 0, $bytes.Length)
+        $stream.Flush()
+    } catch {
+        try {
+            Write-DeployLog "Deployment journal event could not be recorded: $($_.Exception.Message)" "WARNING"
+        } catch {
+            # The deployment journal is advisory; warning-log failures must not affect deployment.
+        }
+    } finally {
+        if ($stream) {
+            try {
+                $stream.Dispose()
+            } catch {
+                try {
+                    Write-DeployLog "Deployment journal file stream could not be closed cleanly: $($_.Exception.Message)" "WARNING"
+                } catch {
+                    # The deployment journal is advisory; warning-log failures must not affect deployment.
+                }
+            }
+        }
+    }
+}
+
+function Set-DeploymentStage {
+    param (
+        [string]$Stage,
+        [string]$Message
+    )
+
+    $script:deploymentStage = $Stage
+    Write-DeployLog $Message
+    Write-DeploymentEvent -Status "running" -Stage $Stage -Message $Message
+}
+
+function Request-DeploymentNotification {
+    try {
+        $taskScheduler = Join-Path $env:SystemRoot "System32\schtasks.exe"
+        & $taskScheduler /Run /TN $script:notificationTaskName 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Write-DeployLog "Notification task '$script:notificationTaskName' could not be started (exit code $LASTEXITCODE). The event remains in the private deployment journal." "WARNING"
+        }
+    } catch {
+        Write-DeployLog "Notification task '$script:notificationTaskName' could not be requested: $($_.Exception.Message)" "WARNING"
+    }
 }
 
 # 3. Mutex / Lock Mechanism (Prevent concurrent deployments)
@@ -116,6 +208,10 @@ try {
     Write-DeployLog "Target Commit  : $remoteCommit"
     Write-DeployLog "=========================================================="
 
+    $script:deploymentId = [guid]::NewGuid().ToString("N")
+    $script:deploymentCommit = $remoteCommit
+    Set-DeploymentStage -Stage "detected" -Message "Deployment started for commit $remoteCommit."
+
     $commitMessage = (& git log -1 --pretty=format:"%s (%an)" "$Remote/$Branch").Trim()
     Write-DeployLog "Deploying: $commitMessage"
 
@@ -129,20 +225,20 @@ try {
         throw "Pre-deployment backup script missing at '$backupScript'"
     }
 
-    Write-DeployLog "Taking pre-deployment database safety backup..."
+    Set-DeploymentStage -Stage "backup" -Message "Taking pre-deployment database safety backup..."
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $backupScript -AppRoot $AppRoot
     $backupExitCode = $LASTEXITCODE
     if ($backupExitCode -ne 0) {
         Write-DeployLog "Pre-deployment backup FAILED (exit code $backupExitCode). Deployment aborted to protect data integrity." "ERROR"
         throw "Backup failed with exit code $backupExitCode"
     }
-    Write-DeployLog "Pre-deployment backup completed successfully."
+    Set-DeploymentStage -Stage "backup_completed" -Message "Pre-deployment backup completed successfully."
 
     # 8. Check If Composer Dependencies Changed
     $composerChanged = & git diff --name-only $localCommit $remoteCommit | Where-Object { $_ -eq "composer.json" -or $_ -eq "composer.lock" }
 
     # 9. Pull Changes Safely (Fast-Forward Only)
-    Write-DeployLog "Applying Git updates..."
+    Set-DeploymentStage -Stage "git_merge" -Message "Applying Git updates with a fast-forward-only merge."
     $pullOutput = & git merge "$Remote/$Branch" --ff-only 2>&1
 
     if ($LASTEXITCODE -ne 0) {
@@ -153,7 +249,7 @@ try {
 
     # 10. Update Composer Dependencies (If changed)
     if ($composerChanged) {
-        Write-DeployLog "composer.json / composer.lock changed. Updating dependencies..."
+        Set-DeploymentStage -Stage "composer" -Message "composer.json / composer.lock changed. Updating dependencies..."
         $composerCmd = Get-Command composer -ErrorAction SilentlyContinue
         if ($composerCmd) {
             $compOut = & composer install --no-dev --optimize-autoloader --no-interaction 2>&1
@@ -170,6 +266,7 @@ try {
     function Invoke-GitRollback {
         param ([string]$TargetCommit, [string]$Reason)
         Write-DeployLog "Initiating rollback to commit $TargetCommit (Reason: $Reason)..." "WARNING"
+        Write-DeploymentEvent -Status "running" -Stage "rollback" -Message "Repository rollback started." -ErrorMessage $Reason
 
         # 1. Ensure working directory is on $Branch
         $checkoutOut = & git checkout $Branch --force 2>&1
@@ -199,7 +296,7 @@ try {
     }
 
     # 11. Run Safe Pending Migrations (NEVER migrate:fresh or reset)
-    Write-DeployLog "Checking for pending database migrations..."
+    Set-DeploymentStage -Stage "migrations" -Message "Checking for pending database migrations."
     $migOutput = & $PhpExe artisan migrate --force 2>&1
     $migExitCode = $LASTEXITCODE
     Write-DeployLog "Migration output: $($migOutput -join ' ')"
@@ -210,13 +307,13 @@ try {
     }
 
     # 12. Refresh Laravel Production Caches
-    Write-DeployLog "Optimizing Laravel config, route, and view caches..."
+    Set-DeploymentStage -Stage "cache_refresh" -Message "Optimizing Laravel config, route, and view caches."
     & $PhpExe artisan config:cache | Out-Null
     & $PhpExe artisan route:cache | Out-Null
     & $PhpExe artisan view:cache | Out-Null
 
     # 13. Application Health Check
-    Write-DeployLog "Performing post-deployment health check on '$HealthCheckUrl'..."
+    Set-DeploymentStage -Stage "health_check" -Message "Performing post-deployment health check on '$HealthCheckUrl'."
     Start-Sleep -Seconds 2
 
     $healthPassed = $false
@@ -234,10 +331,30 @@ try {
     if ($healthPassed) {
         Write-DeployLog "✓ HEALTH CHECK PASSED! Application successfully running commit $remoteCommit." "INFO"
         Write-DeployLog "Deployment completed successfully." "INFO"
+        $script:deploymentStage = "completed"
+        Write-DeploymentEvent -Status "succeeded" -Stage "completed" -Message "Deployment completed and health check passed."
+        Request-DeploymentNotification
     } else {
         Invoke-GitRollback -TargetCommit $rollbackCommit -Reason "Health check failed on $HealthCheckUrl"
         throw "Health check failed; rollback completed"
     }
+
+} catch {
+    $deploymentError = $_.Exception.Message
+    if ($script:deploymentId) {
+        Write-DeployLog "Deployment failed during '$script:deploymentStage': $deploymentError" "ERROR"
+        try {
+            Write-DeploymentEvent `
+                -Status "failed" `
+                -Stage $script:deploymentStage `
+                -Message "Deployment failed during $script:deploymentStage." `
+                -ErrorMessage $deploymentError
+            Request-DeploymentNotification
+        } catch {
+            Write-DeployLog "Could not persist or dispatch the deployment failure event: $($_.Exception.Message)" "ERROR"
+        }
+    }
+    throw
 
 } finally {
     # Always remove the lockfile upon completion or failure

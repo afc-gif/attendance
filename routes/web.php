@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Attendance\AdminAttendanceController as AdminAttendance;
 use App\Http\Controllers\Attendance\AttendanceController;
+use App\Http\Controllers\Attendance\DeploymentMonitorController;
 use App\Http\Controllers\Attendance\UserManagementController;
 use App\Http\Controllers\Auth\AuthController;
 use Illuminate\Support\Facades\Route;
@@ -29,6 +30,10 @@ Route::middleware(['auth'])->group(function () {
 
     // Staff Payroll Statement
     Route::get('/staff/payroll', [\App\Http\Controllers\Attendance\StaffPayrollController::class, 'index'])->name('staff.payroll.index');
+
+    // Administrator-only Deployment Monitor (authorization is enforced in the controller).
+    Route::get('/admin/deployments', [DeploymentMonitorController::class, 'index'])->name('admin.deployments.index');
+    Route::get('/admin/deployments/data', [DeploymentMonitorController::class, 'data'])->name('admin.deployments.data');
 
     // Admin Payroll Management Routes
     Route::prefix('admin/payroll')->name('admin.payroll.')->group(function () {

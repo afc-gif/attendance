@@ -125,6 +125,12 @@
                             <span>Rules & Settings</span>
                         </a>
 
+                        @if(auth()->user()?->isAdmin())
+                            <a href="{{ route('admin.deployments.index') }}" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-extrabold transition {{ request()->routeIs('admin.deployments.*') ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                                <svg class="w-4 h-4 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 17l4 4 4-4m-4-5v9M20.88 18.09A5 5 0 0018 9h-1.26A8 8 0 104 16.25"/></svg>
+                                <span>Deployment Monitor</span>
+                            </a>
+                        @endif
                     </nav>
                 </div>
             </div>
