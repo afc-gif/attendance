@@ -91,6 +91,9 @@ try {
         throw ".env missing"
     }
 
+    # Use the dedicated SYSTEM GitHub deployment SSH identity
+    $env:GIT_SSH = "C:\Windows\System32\OpenSSH\ssh.exe"
+    $env:GIT_SSH_VARIANT = "ssh"
     # 5. Fetch Remote Branch
     $fetchOutput = & git fetch $Remote $Branch 2>&1
     if ($LASTEXITCODE -ne 0) {
