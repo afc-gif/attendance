@@ -2,10 +2,10 @@
 
 namespace Tests\Feature;
 
-use App\Models\AttendanceAuditLog;
 use App\Models\AttendanceCredential;
 use App\Models\AttendanceNetwork;
 use App\Models\AttendanceRecord;
+use App\Models\Employee;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -18,20 +18,45 @@ class AttendanceFeatureTest extends TestCase
 
     protected function createUser(array $overrides = []): User
     {
-        return User::create(array_merge([
+        $user = User::create(array_merge([
             'name' => 'John Staff',
-            'email' => 'staff_' . Str::random(6) . '@example.com',
+            'email' => 'staff_'.Str::random(6).'@example.com',
             'password' => bcrypt('password123'),
             'role' => 'afc_staff',
             'status' => 'approved',
         ], $overrides));
+
+        if (in_array($user->role, ['afc_staff', 'artsci_staff'], true)) {
+            $company = $user->role === 'artsci_staff' ? 'ARTSCI' : 'AFC';
+            Employee::create([
+                'user_id' => $user->id,
+                'employee_id' => ($company === 'ARTSCI' ? 'ART' : 'AFC').'-TEST-'.Str::upper(Str::random(8)),
+                'company' => $company,
+                'first_name' => 'John',
+                'last_name' => 'Staff',
+                'employment_type' => 'full_time',
+                'employment_status' => 'active',
+                'confirmation_status' => 'confirmed',
+            ]);
+
+            if ($user->status === 'approved') {
+                $credential = $this->registerCredentialForUser(
+                    $user,
+                    'test-credential-'.Str::random(10),
+                    'approved',
+                );
+                session(['staff_passkey_credential_id' => $credential->id]);
+            }
+        }
+
+        return $user;
     }
 
     protected function createAdmin(array $overrides = []): User
     {
         return User::create(array_merge([
             'name' => 'Admin Manager',
-            'email' => 'admin_' . Str::random(6) . '@example.com',
+            'email' => 'admin_'.Str::random(6).'@example.com',
             'password' => bcrypt('password123'),
             'role' => 'admin',
             'status' => 'approved',
@@ -47,7 +72,7 @@ class AttendanceFeatureTest extends TestCase
         ]);
     }
 
-    protected function registerCredentialForUser(User $user, string $credentialId = 'cred_john_123', string $approvalStatus = 'approved'): AttendanceCredential
+    protected function registerCredentialForUser(User $user, string $credentialId, string $approvalStatus = 'approved'): AttendanceCredential
     {
         return AttendanceCredential::create([
             'user_id' => $user->id,
@@ -60,7 +85,7 @@ class AttendanceFeatureTest extends TestCase
         ]);
     }
 
-    /** 1. Staff registration requires an invitation */
+    /** 1. Staff registration is managed by HR */
     public function test_staff_cannot_self_register_without_an_invitation(): void
     {
         $response = $this->post(route('register'), [
@@ -72,7 +97,7 @@ class AttendanceFeatureTest extends TestCase
         ]);
 
         $response->assertRedirect(route('register'));
-        $response->assertSessionHas('status', 'Staff accounts are invitation-only. Contact HR for an activation link.');
+        $response->assertSessionHas('status', 'Staff accounts are created by HR. Contact HR for your employee ID.');
         $this->assertDatabaseMissing('users', ['email' => 'newstaff@example.com']);
     }
 
@@ -101,60 +126,32 @@ class AttendanceFeatureTest extends TestCase
         $this->assertEquals('artsci_staff', $pendingUser->role);
     }
 
-    /** 3. Device passkey registration starts in pending approval status */
-    public function test_device_registration_starts_in_pending_approval_status(): void
-    {
-        $staff = $this->createUser();
-
-        $challenge = 'test_challenge_123';
-        session(['webauthn_challenge' => $challenge]);
-        $clientDataJson = \App\Services\WebAuthnService::base64UrlEncode(json_encode([
-            'challenge' => \App\Services\WebAuthnService::base64UrlEncode($challenge)
-        ]));
-
-        $response = $this->actingAs($staff)->postJson(route('attendance.register-device'), [
-            'credential_id' => 'cred_pending_123',
-            'public_key' => 'pubkey_xyz',
-            'device_name' => "Staff Mobile Phone",
-            'client_data_json' => $clientDataJson,
-        ]);
-
-        $response->assertStatus(200);
-
-        $this->assertDatabaseHas('attendance_credentials', [
-            'user_id' => $staff->id,
-            'credential_id' => 'cred_pending_123',
-            'approval_status' => 'pending',
-        ]);
-    }
-
     /** 4. Admin can approve pending device registration */
     public function test_admin_can_approve_pending_device_registration(): void
     {
         $admin = $this->createAdmin();
-        $staff = $this->createUser();
+        $staff = $this->createUser(['status' => 'pending']);
         $this->createApprovedNetwork('127.0.0.1/32');
 
         $pendingCred = $this->registerCredentialForUser($staff, 'cred_unapproved_123', 'pending');
+        $staff->passkeys()->create([
+            'name' => 'Staff phone',
+            'credential_id' => 'cred_unapproved_123',
+            'credential' => [],
+        ]);
 
         $approveResponse = $this->actingAs($admin)->post(route('admin.attendance.credentials.approve', $pendingCred));
         $approveResponse->assertRedirect();
 
         $pendingCred->refresh();
         $this->assertEquals('approved', $pendingCred->approval_status);
+        $this->assertSame('approved', $staff->fresh()->status);
 
-        $challenge = 'test_challenge_123';
-        session(['webauthn_challenge' => $challenge]);
-        $clientDataJson = \App\Services\WebAuthnService::base64UrlEncode(json_encode([
-            'challenge' => \App\Services\WebAuthnService::base64UrlEncode($challenge)
-        ]));
+        session(['staff_passkey_credential_id' => $pendingCred->id]);
 
         $checkInSuccess = $this->actingAs($staff->fresh())
             ->withServerVariables(['REMOTE_ADDR' => '127.0.0.1'])
-            ->postJson(route('attendance.check-in'), [
-                'credential_id' => 'cred_unapproved_123',
-                'client_data_json' => $clientDataJson,
-            ]);
+            ->postJson(route('attendance.check-in'), []);
 
         $checkInSuccess->assertStatus(200);
         $checkInSuccess->assertJson(['success' => true]);
@@ -177,20 +174,11 @@ class AttendanceFeatureTest extends TestCase
     {
         $staff = $this->createUser();
         $this->createApprovedNetwork('127.0.0.1/32');
-        $cred = $this->registerCredentialForUser($staff, 'cred_john_passkey', 'approved');
-
-        $challenge = 'test_challenge_123';
-        session(['webauthn_challenge' => $challenge]);
-        $clientDataJson = \App\Services\WebAuthnService::base64UrlEncode(json_encode([
-            'challenge' => \App\Services\WebAuthnService::base64UrlEncode($challenge)
-        ]));
+        $cred = $staff->attendanceCredentials()->firstOrFail();
 
         $response = $this->actingAs($staff)
             ->withServerVariables(['REMOTE_ADDR' => '127.0.0.1'])
-            ->postJson(route('attendance.check-in'), [
-                'credential_id' => 'cred_john_passkey',
-                'client_data_json' => $clientDataJson,
-            ]);
+            ->postJson(route('attendance.check-in'), []);
 
         $response->assertStatus(200);
         $response->assertJson(['success' => true]);
@@ -202,22 +190,24 @@ class AttendanceFeatureTest extends TestCase
         ]);
     }
 
-    /** 7. Canceling device passkey prompt fails check-in */
-    public function test_canceling_device_passkey_prompt_fails_checkin(): void
+    /** 7. Attendance uses the verified session device, not a client-supplied ID */
+    public function test_checkin_uses_the_verified_session_device_not_a_client_supplied_id(): void
     {
         $staff = $this->createUser();
         $this->createApprovedNetwork('127.0.0.1/32');
-        $cred = $this->registerCredentialForUser($staff, 'cred_john_passkey', 'approved');
+        $cred = $staff->attendanceCredentials()->firstOrFail();
 
         $response = $this->actingAs($staff)
             ->withServerVariables(['REMOTE_ADDR' => '127.0.0.1'])
             ->postJson(route('attendance.check-in'), [
-                'credential_id' => 'cred_john_passkey',
-                'client_data_json' => '', // User canceled prompt
+                'credential_id' => 'forged-device-id',
             ]);
 
-        $response->assertStatus(422);
-        $response->assertJson(['success' => false]);
+        $response->assertOk()->assertJson(['success' => true]);
+        $this->assertDatabaseHas('attendance_records', [
+            'user_id' => $staff->id,
+            'check_in_credential_id' => $cred->id,
+        ]);
     }
 
     /** 7. Admin can view staff analytics */

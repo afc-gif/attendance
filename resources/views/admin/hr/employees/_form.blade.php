@@ -10,7 +10,7 @@
         <label class="text-xs font-bold text-slate-600">Gender<select name="gender" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg"><option value="">Select</option>@foreach(['Female','Male','Other','Prefer not to say'] as $gender)<option value="{{ $gender }}" @selected(old('gender', $employee?->gender) === $gender)>{{ $gender }}</option>@endforeach</select></label>
         <label class="text-xs font-bold text-slate-600">Nationality<input name="nationality" value="{{ old('nationality', $employee?->nationality) }}" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg"></label>
         <label class="text-xs font-bold text-slate-600">Phone<input name="phone" value="{{ old('phone', $employee?->phone) }}" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg"></label>
-        <label class="text-xs font-bold text-slate-600">Email<input type="email" name="email" value="{{ old('email', $employee?->email) }}" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg"><span class="mt-1 block text-[10px] font-normal text-slate-400">If no existing account is linked, this address receives the account activation invitation.</span></label>
+        <label class="text-xs font-bold text-slate-600">Email<input type="email" name="email" value="{{ old('email', $employee?->email) }}" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg"><span class="mt-1 block text-[10px] font-normal text-slate-400">Contact information only. Staff sign in with their employee ID and registered device.</span></label>
     </div>
     <label class="block text-xs font-bold text-slate-600">Residential address<textarea name="residential_address" rows="2" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg">{{ old('residential_address', $employee?->residential_address) }}</textarea></label>
     <label class="block text-xs font-bold text-slate-600">Religion <span class="font-normal text-slate-400">(restricted HR information)</span><input name="religion" value="{{ old('religion', $employee?->religion) }}" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg"></label>
@@ -36,9 +36,9 @@
         <label class="text-xs font-bold text-slate-600">Department<select name="department_id" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg"><option value="">None</option>@foreach($departments as $department)<option value="{{ $department->id }}" @selected(old('department_id', $employee?->department_id) == $department->id)>{{ $department->company }} · {{ $department->name }}</option>@endforeach</select></label>
         <label class="text-xs font-bold text-slate-600">Position<select name="position_id" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg"><option value="">None</option>@foreach($positions as $position)<option value="{{ $position->id }}" @selected(old('position_id', $employee?->position_id) == $position->id)>{{ $position->company }} · {{ $position->title }}</option>@endforeach</select></label>
         <label class="text-xs font-bold text-slate-600">Reporting manager<select name="reporting_manager_id" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg"><option value="">None</option>@foreach($managers as $manager)<option value="{{ $manager->id }}" @selected(old('reporting_manager_id', $employee?->reporting_manager_id) == $manager->id)>{{ $manager->full_name }} ({{ $manager->employee_id }})</option>@endforeach</select></label>
-        <label class="text-xs font-bold text-slate-600">Optional login account
+        <label class="text-xs font-bold text-slate-600">Link existing login account (optional)
             <select name="user_id" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg">
-                <option value="">No account linked</option>
+                <option value="">Create a new staff account</option>
                 @if($employee?->user)
                     <option value="{{ $employee->user_id }}" selected>{{ $employee->user->name }}</option>
                 @endif
@@ -46,6 +46,7 @@
                     <option value="{{ $user->id }}" @selected(old('user_id', $employee?->user_id) == $user->id)>{{ $user->name }} · {{ $user->email }}</option>
                 @endforeach
             </select>
+            <span class="mt-1 block text-[10px] font-normal text-slate-400">A staff account is always created or linked automatically. Give the employee their generated ID to register their device.</span>
         </label>
         <label class="text-xs font-bold text-slate-600">Employment type<select name="employment_type" required class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg">@foreach(['full_time','part_time','contract','intern','temporary'] as $type)<option value="{{ $type }}" @selected(old('employment_type', $employee?->employment_type ?? 'full_time') === $type)>{{ ucfirst(str_replace('_',' ', $type)) }}</option>@endforeach</select></label>
         <label class="text-xs font-bold text-slate-600">Employment date<input type="date" name="employment_date" value="{{ old('employment_date', optional($employee?->employment_date)->format('Y-m-d')) }}" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg"></label>

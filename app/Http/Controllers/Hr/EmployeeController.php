@@ -9,8 +9,8 @@ use App\Models\EmployeeEmploymentHistory;
 use App\Models\HrDepartment;
 use App\Models\HrPosition;
 use App\Models\User;
+use App\Services\EmployeeAccountService;
 use App\Services\EmployeeIdService;
-use App\Services\EmployeeInvitationService;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
@@ -20,7 +20,6 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 class EmployeeController extends Controller
 {
@@ -62,15 +61,15 @@ class EmployeeController extends Controller
     public function store(
         Request $request,
         EmployeeIdService $employeeIds,
-        EmployeeInvitationService $invitations,
+        EmployeeAccountService $accounts,
     ) {
         $validated = $this->validateEmployee($request);
-        $pendingInvitation = null;
 
-        $employee = DB::transaction(function () use ($validated, $employeeIds, $invitations, &$pendingInvitation) {
+        $employee = DB::transaction(function () use ($validated, $employeeIds, $accounts) {
             $validated['employee_id'] = $employeeIds->generate($validated['company']);
 
             $employee = Employee::create($validated);
+            $accounts->ensureAccount($employee);
             $this->syncEmergencyContact($employee, $validated);
             EmployeeEmploymentHistory::create([
                 'employee_id' => $employee->id,
@@ -83,37 +82,17 @@ class EmployeeController extends Controller
                 'created_by' => Auth::id(),
             ]);
             $this->storeEmployeeDocuments($employee, request());
-            $pendingInvitation = $invitations->prepare($employee);
 
             return $employee;
         });
 
-        if ($pendingInvitation) {
-            try {
-                $invitations->send(
-                    $employee,
-                    $pendingInvitation['invitation'],
-                    $pendingInvitation['token'],
-                    $request->getSchemeAndHttpHost(),
-                );
-            } catch (TransportExceptionInterface $exception) {
-                report($exception);
-
-                return redirect()->route('admin.hr.employees.show', $employee)
-                    ->with('error', 'Employee created, but the invitation email could not be delivered. Check mail settings and resend it from the employee profile.');
-            }
-        }
-
-        $message = $pendingInvitation
-            ? "Employee {$employee->employee_id} created and an activation invitation was sent to {$pendingInvitation['invitation']->invited_to}."
-            : "Employee {$employee->employee_id} created successfully.";
-
-        return redirect()->route('admin.hr.employees.show', $employee)->with('success', $message);
+        return redirect()->route('admin.hr.employees.show', $employee)
+            ->with('success', "Employee {$employee->employee_id} created. Share this ID with the employee to register their device.");
     }
 
     public function show(Employee $employee)
     {
-        $employee->load(['department', 'position', 'reportingManager', 'user', 'invitation', 'documents', 'emergencyContacts', 'employmentHistories']);
+        $employee->load(['department', 'position', 'reportingManager', 'user.attendanceCredentials', 'documents', 'emergencyContacts', 'employmentHistories']);
 
         return view('admin.hr.employees.show', compact('employee'));
     }
@@ -128,38 +107,17 @@ class EmployeeController extends Controller
         ));
     }
 
-    public function update(Request $request, Employee $employee, EmployeeInvitationService $invitations)
+    public function update(Request $request, Employee $employee, EmployeeAccountService $accounts)
     {
         $validated = $this->validateEmployee($request, $employee);
-        $oldUserId = $employee->user_id;
-        $oldEmail = $employee->email;
-        $pendingInvitation = null;
 
-        DB::transaction(function () use ($employee, $validated, $oldUserId, $oldEmail, $invitations, &$pendingInvitation) {
+        DB::transaction(function () use ($employee, $validated, $accounts) {
             $oldDepartment = $employee->department_id;
             $oldPosition = $employee->position_id;
             $employee->update($validated);
             $this->syncEmergencyContact($employee, $validated);
             $this->storeEmployeeDocuments($employee, request());
-
-            $linkedUser = $employee->user;
-            if ($linkedUser && $linkedUser->status === 'pending' && $employee->email && $linkedUser->email !== $employee->email) {
-                if (User::where('email', $employee->email)->where('id', '!=', $linkedUser->id)->exists()) {
-                    throw ValidationException::withMessages([
-                        'email' => 'Another account already uses this email address.',
-                    ]);
-                }
-
-                $linkedUser->update(['email' => $employee->email]);
-            }
-
-            $needsInvitation = $oldUserId !== $employee->user_id
-                || (! $employee->user_id && (bool) $employee->email)
-                || ($linkedUser?->status === 'pending' && $oldEmail !== $employee->email);
-
-            if ($needsInvitation) {
-                $pendingInvitation = $invitations->prepare($employee);
-            }
+            $accounts->ensureAccount($employee);
 
             if ($oldDepartment != $employee->department_id || $oldPosition != $employee->position_id) {
                 EmployeeEmploymentHistory::create([
@@ -175,49 +133,8 @@ class EmployeeController extends Controller
             }
         });
 
-        if ($pendingInvitation) {
-            try {
-                $invitations->send(
-                    $employee,
-                    $pendingInvitation['invitation'],
-                    $pendingInvitation['token'],
-                    $request->getSchemeAndHttpHost(),
-                );
-            } catch (TransportExceptionInterface $exception) {
-                report($exception);
-
-                return redirect()->route('admin.hr.employees.show', $employee)
-                    ->with('error', 'Employee updated, but the invitation email could not be delivered. Check mail settings and resend it from the employee profile.');
-            }
-        }
-
-        $message = $pendingInvitation ? 'Employee updated and activation invitation sent.' : 'Employee record updated successfully.';
-
-        return redirect()->route('admin.hr.employees.show', $employee)->with('success', $message);
-    }
-
-    public function sendInvitation(Request $request, Employee $employee, EmployeeInvitationService $invitations)
-    {
-        $pendingInvitation = DB::transaction(fn () => $invitations->prepare($employee, force: true));
-
-        if (! $pendingInvitation) {
-            return back()->with('error', 'Add an employee email address before sending an invitation.');
-        }
-
-        try {
-            $invitations->send(
-                $employee,
-                $pendingInvitation['invitation'],
-                $pendingInvitation['token'],
-                $request->getSchemeAndHttpHost(),
-            );
-        } catch (TransportExceptionInterface $exception) {
-            report($exception);
-
-            return back()->with('error', 'The invitation email could not be delivered. Check the mail settings and try again.');
-        }
-
-        return back()->with('success', 'A new activation invitation was sent to '.$pendingInvitation['invitation']->invited_to.'.');
+        return redirect()->route('admin.hr.employees.show', $employee)
+            ->with('success', 'Employee record updated successfully.');
     }
 
     public function uploadPassportPhoto(Request $request, Employee $employee)
@@ -352,7 +269,7 @@ class EmployeeController extends Controller
             $user = User::findOrFail($validated['user_id']);
             $expectedRole = $validated['company'] === 'ARTSCI' ? 'artsci_staff' : 'afc_staff';
 
-            if ($user->role !== $expectedRole) {
+            if ($user->role !== $expectedRole && $user->id !== $employee?->user_id) {
                 throw ValidationException::withMessages([
                     'user_id' => 'Select an attendance account belonging to the employee company.',
                 ]);

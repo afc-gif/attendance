@@ -36,6 +36,14 @@ class AuthController extends Controller
             /** @var User $user */
             $user = Auth::user();
 
+            if (! $user->isAdmin()) {
+                Auth::logout();
+
+                return back()->withErrors([
+                    'email' => 'Staff sign in with their employee ID and registered device.',
+                ])->onlyInput('email');
+            }
+
             if ($user->isPending()) {
                 Auth::logout();
 
@@ -72,7 +80,7 @@ class AuthController extends Controller
     public function register(Request $request)
     {
         return redirect()->route('register')
-            ->with('status', 'Staff accounts are invitation-only. Contact HR for an activation link.');
+            ->with('status', 'Staff accounts are created by HR. Contact HR for your employee ID.');
     }
 
     public function logout(Request $request)

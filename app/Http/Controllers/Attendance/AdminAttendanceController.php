@@ -11,7 +11,10 @@ use App\Models\AttendanceSetting;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Laravel\Passkeys\Passkey;
 
 class AdminAttendanceController extends Controller
 {
@@ -20,7 +23,7 @@ class AdminAttendanceController extends Controller
         /** @var User $user */
         $user = Auth::user();
 
-        if (!$user || !$user->isAdmin()) {
+        if (! $user || ! $user->isAdmin()) {
             abort(403, 'Unauthorized. Attendance management is restricted to authorized administrators.');
         }
     }
@@ -124,10 +127,33 @@ class AdminAttendanceController extends Controller
     {
         $this->authorizeAdmin();
 
-        $credential->update([
-            'approval_status' => 'approved',
-            'is_active' => true,
-        ]);
+        $passkey = Passkey::where('user_id', $credential->user_id)
+            ->where('credential_id', $credential->credential_id)
+            ->first();
+
+        if (! $passkey || ! $credential->user?->hrEmployee || $credential->user->hrEmployee->employment_status !== 'active') {
+            return back()->with('error', 'This legacy or inactive device cannot be approved for ID-based sign-in. Ask the employee to register a new device with their HR employee ID.');
+        }
+
+        DB::transaction(function () use ($credential) {
+            AttendanceCredential::where('user_id', $credential->user_id)
+                ->where('id', '!=', $credential->id)
+                ->where('is_active', true)
+                ->update([
+                    'is_active' => false,
+                    'deactivated_at' => now(),
+                    'deactivated_by' => Auth::id(),
+                ]);
+
+            $credential->update([
+                'approval_status' => 'approved',
+                'is_active' => true,
+            ]);
+
+            if ($credential->user->status === 'pending') {
+                $credential->user->update(['status' => 'approved']);
+            }
+        });
 
         AttendanceAuditLog::logEvent(
             eventType: 'device_approval',
@@ -172,7 +198,7 @@ class AdminAttendanceController extends Controller
         if ($search !== '') {
             $usersQuery->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
+                    ->orWhere('email', 'like', "%{$search}%");
             });
         }
 
@@ -301,15 +327,15 @@ class AdminAttendanceController extends Controller
 
         $newValues = [
             'status' => $validated['status'],
-            'check_in_at' => !empty($validated['check_in_at']) ? Carbon::parse($validated['check_in_at'])->toIso8601String() : null,
-            'check_out_at' => !empty($validated['check_out_at']) ? Carbon::parse($validated['check_out_at'])->toIso8601String() : null,
+            'check_in_at' => ! empty($validated['check_in_at']) ? Carbon::parse($validated['check_in_at'])->toIso8601String() : null,
+            'check_out_at' => ! empty($validated['check_out_at']) ? Carbon::parse($validated['check_out_at'])->toIso8601String() : null,
             'notes' => $validated['notes'] ?? $record->notes,
         ];
 
         $record->update([
             'status' => $validated['status'],
-            'check_in_at' => !empty($validated['check_in_at']) ? Carbon::parse($validated['check_in_at']) : $record->check_in_at,
-            'check_out_at' => !empty($validated['check_out_at']) ? Carbon::parse($validated['check_out_at']) : $record->check_out_at,
+            'check_in_at' => ! empty($validated['check_in_at']) ? Carbon::parse($validated['check_in_at']) : $record->check_in_at,
+            'check_out_at' => ! empty($validated['check_out_at']) ? Carbon::parse($validated['check_out_at']) : $record->check_out_at,
             'notes' => $validated['notes'] ?? $record->notes,
             'check_in_method' => $record->check_in_method ?: 'manual',
         ]);
@@ -368,12 +394,12 @@ class AdminAttendanceController extends Controller
         $count = 0;
 
         foreach ($records as $record) {
-            if (!$record->check_in_at) {
+            if (! $record->check_in_at) {
                 continue;
             }
 
             $newCheckIn = Carbon::parse($record->check_in_at)->addHours($hoursToAdd);
-            $expectedArrival = Carbon::createFromFormat('Y-m-d H:i', $dateStr . ' ' . $expectedTimeStr, $tz);
+            $expectedArrival = Carbon::createFromFormat('Y-m-d H:i', $dateStr.' '.$expectedTimeStr, $tz);
             $lateDeadline = (clone $expectedArrival)->addMinutes($lateThreshold);
 
             $newStatus = $newCheckIn->greaterThan($lateDeadline) ? 'late' : 'present';
@@ -425,8 +451,8 @@ class AdminAttendanceController extends Controller
             ['user_id' => $targetUser->id, 'attendance_date' => $validated['attendance_date']],
             [
                 'status' => $validated['status'],
-                'check_in_at' => !empty($validated['check_in_at']) ? Carbon::parse($validated['check_in_at']) : null,
-                'check_out_at' => !empty($validated['check_out_at']) ? Carbon::parse($validated['check_out_at']) : null,
+                'check_in_at' => ! empty($validated['check_in_at']) ? Carbon::parse($validated['check_in_at']) : null,
+                'check_out_at' => ! empty($validated['check_out_at']) ? Carbon::parse($validated['check_out_at']) : null,
                 'check_in_method' => 'manual',
                 'notes' => $validated['notes'] ?? 'Manually created by admin',
             ]
@@ -533,12 +559,12 @@ class AdminAttendanceController extends Controller
         $this->authorizeAdmin();
 
         try {
-            \Illuminate\Support\Facades\Artisan::call('attendance:update-office-ip', ['--force' => true]);
-            $output = trim(\Illuminate\Support\Facades\Artisan::output());
+            Artisan::call('attendance:update-office-ip', ['--force' => true]);
+            $output = trim(Artisan::output());
 
             return back()->with('success', "Office public IP auto-update completed: {$output}");
         } catch (\Throwable $e) {
-            return back()->with('error', "Failed to run public IP auto-updater: " . $e->getMessage());
+            return back()->with('error', 'Failed to run public IP auto-updater: '.$e->getMessage());
         }
     }
 
@@ -547,24 +573,24 @@ class AdminAttendanceController extends Controller
         $this->authorizeAdmin();
 
         $clientIp = AttendanceController::resolveClientIp($request);
-        if (!$clientIp) {
+        if (! $clientIp) {
             return back()->with('error', 'Could not resolve client IP.');
         }
 
         $network = AttendanceNetwork::first();
-        if (!$network) {
+        if (! $network) {
             $network = AttendanceNetwork::create([
                 'name' => 'HQ Main Office Wi-Fi',
-                'ip_range' => $clientIp . '/32',
+                'ip_range' => $clientIp.'/32',
                 'enabled' => true,
-                'description' => 'Auto-synced to current admin public IP on ' . Carbon::now()->format('M j, Y g:i A'),
+                'description' => 'Auto-synced to current admin public IP on '.Carbon::now()->format('M j, Y g:i A'),
                 'created_by' => Auth::id(),
             ]);
         } else {
             $network->update([
-                'ip_range' => $clientIp . '/32',
+                'ip_range' => $clientIp.'/32',
                 'enabled' => true,
-                'description' => 'Auto-synced to current admin public IP on ' . Carbon::now()->format('M j, Y g:i A'),
+                'description' => 'Auto-synced to current admin public IP on '.Carbon::now()->format('M j, Y g:i A'),
             ]);
         }
 
@@ -663,7 +689,7 @@ class AdminAttendanceController extends Controller
     {
         $this->authorizeAdmin();
 
-        $network->update(['enabled' => !$network->enabled]);
+        $network->update(['enabled' => ! $network->enabled]);
 
         return back()->with('success', 'Network status updated.');
     }
@@ -730,13 +756,13 @@ class AdminAttendanceController extends Controller
 
     protected function autoCheckoutForgottenRecords(): void
     {
-        if (!AttendanceSetting::get('auto_checkout_enabled', true)) {
+        if (! AttendanceSetting::get('auto_checkout_enabled', true)) {
             return;
         }
 
-        $tz       = AttendanceSetting::get('timezone', config('app.timezone', 'UTC'));
+        $tz = AttendanceSetting::get('timezone', config('app.timezone', 'UTC'));
         $autoTime = AttendanceSetting::get('auto_checkout_time', '17:00');
-        $nowTz    = Carbon::now($tz);
+        $nowTz = Carbon::now($tz);
 
         $unclosedRecords = AttendanceRecord::whereNotNull('check_in_at')
             ->whereNull('check_out_at')
@@ -747,22 +773,22 @@ class AdminAttendanceController extends Controller
             // Build the auto-checkout moment in the correct local timezone
             $autoCheckoutDateTime = Carbon::createFromFormat(
                 'Y-m-d H:i',
-                $recDate->toDateString() . ' ' . $autoTime,
+                $recDate->toDateString().' '.$autoTime,
                 $tz
             );
 
             if ($nowTz->greaterThanOrEqualTo($autoCheckoutDateTime)) {
                 $rec->update([
                     'check_out_at' => $autoCheckoutDateTime,
-                    'notes'        => trim(($rec->notes ? $rec->notes . ' | ' : '') . 'System Auto Check-Out (Forgotten Check-Out)'),
+                    'notes' => trim(($rec->notes ? $rec->notes.' | ' : '').'System Auto Check-Out (Forgotten Check-Out)'),
                 ]);
 
                 AttendanceAuditLog::logEvent(
-                    eventType:    'auto_checkout',
-                    actor:        null,
+                    eventType: 'auto_checkout',
+                    actor: null,
                     affectedUser: $rec->user,
-                    record:       $rec,
-                    reason:       'Automatic Auto Check-Out triggered for forgotten check-out'
+                    record: $rec,
+                    reason: 'Automatic Auto Check-Out triggered for forgotten check-out'
                 );
             }
         }

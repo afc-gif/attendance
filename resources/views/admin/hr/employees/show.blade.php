@@ -69,17 +69,10 @@
                 @if($employee->user)
                     <div class="flex justify-between"><span class="text-slate-400">Account status</span><strong>{{ ucfirst($employee->user->status) }}</strong></div>
                 @endif
-                @if($employee->invitation)
-                    <div class="flex justify-between"><span class="text-slate-400">Invitation</span><strong>{{ $employee->invitation->accepted_at ? 'Confirmed' : ($employee->invitation->expires_at->isPast() ? 'Expired' : 'Awaiting confirmation') }}</strong></div>
-                @endif
-                @if(!$employee->user || $employee->user->status === 'pending')
-                    @if($employee->email || $employee->user)
-                        <form method="POST" action="{{ route('admin.hr.employees.invitation.send', $employee) }}" class="pt-2">
-                            @csrf
-                            <button type="submit" class="w-full bg-indigo-600 text-white rounded-lg px-3 py-2 text-xs font-bold">{{ $employee->invitation ? 'Resend Activation Invitation' : 'Send Activation Invitation' }}</button>
-                        </form>
-                    @endif
-                @endif
+                <div class="flex justify-between"><span class="text-slate-400">Staff sign-in ID</span><strong>{{ $employee->employee_id }}</strong></div>
+                @php($activeDevice = $employee->user?->attendanceCredentials->where('is_active', true)->sortByDesc('registered_at')->first())
+                <div class="flex justify-between"><span class="text-slate-400">Device registration</span><strong>{{ $activeDevice?->approval_status ? ucfirst($activeDevice->approval_status) : 'Not registered' }}</strong></div>
+                <p class="text-[11px] leading-relaxed text-slate-500">Share this employee ID with the staff member. They use it to register their device and sign in. A new device must be approved by an administrator before use.</p>
             </div>
             <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm"><h2 class="font-extrabold text-sm mb-3">Documents</h2>
                 @forelse($employee->documents as $document)<div class="flex items-center justify-between py-2 text-xs border-b border-slate-100"><div><div class="font-bold">{{ $document->original_name }}</div><div class="text-slate-400">{{ $document->document_type }}</div></div><a href="{{ route('admin.hr.documents.download', $document) }}" class="text-indigo-600 font-bold">Download</a></div>@empty<p class="text-xs text-slate-400">No documents uploaded.</p>@endforelse

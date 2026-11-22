@@ -37,11 +37,6 @@ class Employee extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function invitation()
-    {
-        return $this->hasOne(EmployeeInvitation::class);
-    }
-
     public function department()
     {
         return $this->belongsTo(HrDepartment::class, 'department_id');

@@ -7,7 +7,7 @@ use App\Http\Controllers\Attendance\DeploymentMonitorController;
 use App\Http\Controllers\Attendance\StaffPayrollController;
 use App\Http\Controllers\Attendance\UserManagementController;
 use App\Http\Controllers\Auth\AuthController;
-use App\Http\Controllers\Auth\EmployeeInvitationController;
+use App\Http\Controllers\Auth\StaffPasskeyController;
 use App\Http\Controllers\Hr\DashboardController;
 use App\Http\Controllers\Hr\DocumentController;
 use App\Http\Controllers\Hr\EmployeeController;
@@ -23,32 +23,25 @@ Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/register', [AuthController::class, 'showRegisterForm'])->name('register');
 Route::post('/register', [AuthController::class, 'register']);
-Route::get('/invitation/{token}', [EmployeeInvitationController::class, 'show'])
-    ->where('token', '[A-Za-z0-9]+')
-    ->middleware('throttle:10,1')
-    ->name('employee-invitations.show');
-Route::post('/invitation/{token}', [EmployeeInvitationController::class, 'accept'])
-    ->where('token', '[A-Za-z0-9]+')
-    ->middleware('throttle:10,1')
-    ->name('employee-invitations.accept');
+Route::prefix('staff/passkeys')->name('staff.passkeys.')->middleware('throttle:6,1')->group(function () {
+    Route::post('/register/options', [StaffPasskeyController::class, 'registrationOptions'])->name('register.options');
+    Route::post('/register', [StaffPasskeyController::class, 'register'])->name('register');
+    Route::post('/login/options', [StaffPasskeyController::class, 'loginOptions'])->name('login.options');
+    Route::post('/login', [StaffPasskeyController::class, 'login'])->name('login');
+});
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 // Authenticated Staff Routes
 Route::middleware(['auth'])->group(function () {
-    Route::get('/', [AttendanceController::class, 'dashboard'])->name('attendance.dashboard');
-    Route::get('/attendance', [AttendanceController::class, 'dashboard']);
-    Route::get('/attendance/history', [AttendanceController::class, 'history'])->name('attendance.history');
+    Route::get('/', [AttendanceController::class, 'dashboard'])->middleware('staff.passkey')->name('attendance.dashboard');
+    Route::get('/attendance', [AttendanceController::class, 'dashboard'])->middleware('staff.passkey');
+    Route::get('/attendance/history', [AttendanceController::class, 'history'])->middleware('staff.passkey')->name('attendance.history');
 
-    // WebAuthn Passkey API Endpoints
-    Route::get('/attendance/register-options', [AttendanceController::class, 'getRegisterOptions'])->name('attendance.register-options');
-    Route::post('/attendance/register-device', [AttendanceController::class, 'registerDevice'])->name('attendance.register-device');
-    Route::get('/attendance/assertion-options', [AttendanceController::class, 'getAssertionOptions'])->name('attendance.assertion-options');
-    Route::post('/attendance/client-error', [AttendanceController::class, 'logClientError'])->name('attendance.client-error');
-    Route::post('/attendance/check-in', [AttendanceController::class, 'checkIn'])->name('attendance.check-in');
-    Route::post('/attendance/check-out', [AttendanceController::class, 'checkOut'])->name('attendance.check-out');
+    Route::post('/attendance/check-in', [AttendanceController::class, 'checkIn'])->middleware('staff.passkey')->name('attendance.check-in');
+    Route::post('/attendance/check-out', [AttendanceController::class, 'checkOut'])->middleware('staff.passkey')->name('attendance.check-out');
 
     // Staff Payroll Statement
-    Route::get('/staff/payroll', [StaffPayrollController::class, 'index'])->name('staff.payroll.index');
+    Route::get('/staff/payroll', [StaffPayrollController::class, 'index'])->middleware('staff.passkey')->name('staff.payroll.index');
 
     // Administrator-only Deployment Monitor (authorization is enforced in the controller).
     Route::get('/admin/deployments', [DeploymentMonitorController::class, 'index'])->name('admin.deployments.index');
@@ -124,7 +117,6 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/employees', [EmployeeController::class, 'index'])->name('employees.index');
         Route::get('/employees/create', [EmployeeController::class, 'create'])->name('employees.create');
         Route::post('/employees', [EmployeeController::class, 'store'])->name('employees.store');
-        Route::post('/employees/{employee}/invitation', [EmployeeController::class, 'sendInvitation'])->name('employees.invitation.send');
         Route::get('/employees/{employee}', [EmployeeController::class, 'show'])->name('employees.show');
         Route::get('/employees/{employee}/edit', [EmployeeController::class, 'edit'])->name('employees.edit');
         Route::put('/employees/{employee}', [EmployeeController::class, 'update'])->name('employees.update');
