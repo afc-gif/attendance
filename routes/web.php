@@ -11,6 +11,7 @@ use App\Http\Controllers\Hr\DashboardController;
 use App\Http\Controllers\Hr\DocumentController;
 use App\Http\Controllers\Hr\EmployeeController;
 use App\Http\Controllers\Hr\EmploymentController;
+use App\Http\Controllers\Hr\IdCardController;
 use App\Http\Controllers\Hr\OrganizationController;
 use App\Http\Controllers\Hr\ReportController;
 use App\Http\Controllers\Hr\SettingController;
@@ -118,6 +119,13 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/employees/{employee}/edit', [EmployeeController::class, 'edit'])->name('employees.edit');
         Route::put('/employees/{employee}', [EmployeeController::class, 'update'])->name('employees.update');
         Route::delete('/employees/{employee}', [EmployeeController::class, 'destroy'])->name('employees.destroy');
+        Route::post('/employees/{employee}/passport-photo', [EmployeeController::class, 'uploadPassportPhoto'])->name('employees.passport.upload');
+        Route::delete('/employees/{employee}/passport-photo', [EmployeeController::class, 'deletePassportPhoto'])->name('employees.passport.destroy');
+        Route::get('/employees/{employee}/passport-photo', [EmployeeController::class, 'passportPhoto'])->name('employees.passport.show');
+
+        Route::post('/employees/{employee}/id-card/generate', [IdCardController::class, 'generate'])->name('employees.id-card.generate');
+        Route::get('/employees/{employee}/id-card', [IdCardController::class, 'preview'])->name('employees.id-card.preview');
+        Route::get('/employees/{employee}/id-card/pdf', [IdCardController::class, 'downloadPdf'])->name('employees.id-card.download');
 
         Route::get('/organization', [OrganizationController::class, 'index'])->name('organization.index');
         Route::post('/departments', [OrganizationController::class, 'storeDepartment'])->name('departments.store');

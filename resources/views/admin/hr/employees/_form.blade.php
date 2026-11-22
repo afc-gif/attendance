@@ -49,7 +49,7 @@
 <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-5">
     <h2 class="font-extrabold text-sm text-slate-800">Secure Documents</h2>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-bold text-slate-600">
-        @foreach(['passport_photo'=>'Passport photograph (max 2 MB)','cv'=>'CV','certificates'=>'Certificates','identification_document'=>'Identification document','employment_letter'=>'Employment letter','supporting_document'=>'Other supporting document'] as $name => $label)
+        @foreach(['cv'=>'CV','certificates'=>'Certificates','identification_document'=>'Identification document','employment_letter'=>'Employment letter','supporting_document'=>'Other supporting document'] as $name => $label)
             <label>{{ $label }}<input type="file" name="{{ $name }}" accept=".pdf,.jpg,.jpeg,.png" class="mt-1 w-full text-xs"></label>
         @endforeach
     </div>

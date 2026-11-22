@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Employee;
 use App\Models\EmployeeDocument;
 use App\Models\HrDepartment;
+use App\Models\HrPosition;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -174,5 +175,146 @@ class HrManagementTest extends TestCase
             ->get(route('admin.hr.reports.export'))
             ->assertOk()
             ->assertHeader('content-disposition');
+    }
+
+    public function test_super_admin_can_upload_replace_and_view_passport_photograph(): void
+    {
+        Storage::fake('local');
+        $superAdmin = $this->superAdmin();
+        $employee = $this->createCardEligibleEmployee();
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=');
+
+        $this->actingAs($superAdmin)
+            ->post(route('admin.hr.employees.passport.upload', $employee), [
+                'passport_photo' => UploadedFile::fake()->createWithContent('passport.png', $png),
+            ])
+            ->assertRedirect();
+
+        $employee->refresh();
+        $firstPath = $employee->passport_photo_path;
+        $this->assertNotNull($firstPath);
+        $this->assertTrue(Storage::disk('local')->exists($firstPath));
+
+        $this->actingAs($superAdmin)
+            ->post(route('admin.hr.employees.passport.upload', $employee), [
+                'passport_photo' => UploadedFile::fake()->createWithContent('replacement.png', $png),
+            ])
+            ->assertRedirect();
+
+        $employee->refresh();
+        $this->assertNotSame($firstPath, $employee->passport_photo_path);
+        $this->assertTrue(! Storage::disk('local')->exists($firstPath));
+        $this->assertTrue(Storage::disk('local')->exists($employee->passport_photo_path));
+
+        $this->actingAs($superAdmin)
+            ->get(route('admin.hr.employees.passport.show', $employee))
+            ->assertOk()
+            ->assertHeader('cache-control');
+    }
+
+    public function test_passport_rejects_invalid_image_and_authorization(): void
+    {
+        Storage::fake('local');
+        $superAdmin = $this->superAdmin();
+        $employee = $this->createCardEligibleEmployee();
+
+        $this->actingAs($superAdmin)
+            ->post(route('admin.hr.employees.passport.upload', $employee), [
+                'passport_photo' => UploadedFile::fake()->create('notes.txt', 10, 'text/plain'),
+            ])
+            ->assertSessionHasErrors('passport_photo');
+
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=');
+        $this->actingAs($superAdmin)
+            ->post(route('admin.hr.employees.passport.upload', $employee), [
+                'passport_photo' => UploadedFile::fake()->createWithContent('large.png', str_repeat('x', 2100 * 1024).$png),
+            ])
+            ->assertSessionHasErrors('passport_photo');
+
+        /** @var User $admin */
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin)
+            ->get(route('admin.hr.employees.passport.show', $employee))
+            ->assertForbidden();
+    }
+
+    public function test_id_card_preview_and_pdf_support_both_company_brands(): void
+    {
+        Storage::fake('local');
+        $superAdmin = $this->superAdmin();
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=');
+
+        foreach (['ARTSCI', 'AFC'] as $company) {
+            $employee = $this->createCardEligibleEmployee($company);
+            $employee->update(['passport_photo_path' => 'hr/employees/'.$employee->employee_id.'/passport/test.png']);
+            Storage::disk('local')->put($employee->passport_photo_path, $png);
+
+            $this->actingAs($superAdmin)
+                ->post(route('admin.hr.employees.id-card.generate', $employee))
+                ->assertRedirect(route('admin.hr.employees.id-card.preview', $employee));
+
+            $this->actingAs($superAdmin)
+                ->get(route('admin.hr.employees.id-card.preview', $employee))
+                ->assertOk()
+                ->assertSee($employee->full_name)
+                ->assertSee($employee->employee_id);
+
+            $this->actingAs($superAdmin)
+                ->get(route('admin.hr.employees.id-card.download', $employee))
+                ->assertOk()
+                ->assertHeader('content-type', 'application/pdf');
+        }
+    }
+
+    public function test_id_card_requires_photo_department_position_and_is_authorized(): void
+    {
+        $superAdmin = $this->superAdmin();
+        $employee = Employee::create([
+            'employee_id' => 'ART-000999',
+            'company' => 'ARTSCI',
+            'first_name' => 'Missing',
+            'last_name' => 'Data',
+            'employment_type' => 'full_time',
+            'employment_status' => 'active',
+            'confirmation_status' => 'probation',
+        ]);
+
+        $this->actingAs($superAdmin)
+            ->post(route('admin.hr.employees.id-card.generate', $employee))
+            ->assertStatus(422);
+
+        /** @var User $admin */
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin)
+            ->post(route('admin.hr.employees.id-card.generate', $employee))
+            ->assertForbidden();
+    }
+
+    protected function createCardEligibleEmployee(string $company = 'ARTSCI'): Employee
+    {
+        $department = HrDepartment::create([
+            'company' => $company,
+            'name' => $company.' Engineering',
+            'is_active' => true,
+        ]);
+        $position = HrPosition::create([
+            'company' => $company,
+            'department_id' => $department->id,
+            'title' => 'Software Engineer',
+            'is_active' => true,
+        ]);
+
+        return Employee::create([
+            'employee_id' => $company === 'ARTSCI' ? 'ART-000100' : 'AFC-000100',
+            'company' => $company,
+            'first_name' => 'Ada',
+            'last_name' => 'Lovelace',
+            'department_id' => $department->id,
+            'position_id' => $position->id,
+            'employment_type' => 'full_time',
+            'employment_status' => 'active',
+            'confirmation_status' => 'confirmed',
+            'passport_photo_mime' => 'image/png',
+        ]);
     }
 }

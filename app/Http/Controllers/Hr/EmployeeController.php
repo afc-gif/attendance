@@ -11,9 +11,13 @@ use App\Models\HrPosition;
 use App\Models\User;
 use App\Services\EmployeeIdService;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\Response;
 
 class EmployeeController extends Controller
 {
@@ -126,6 +130,91 @@ class EmployeeController extends Controller
             ->with('success', 'Employee record updated successfully.');
     }
 
+    public function uploadPassportPhoto(Request $request, Employee $employee)
+    {
+        $validated = $request->validate([
+            'passport_photo' => [
+                'required',
+                'file',
+                'image',
+                'mimes:jpg,jpeg,png',
+                'max:2048',
+            ],
+        ]);
+
+        /** @var UploadedFile $file */
+        $file = $validated['passport_photo'];
+        $imageInfo = @getimagesize($file->getRealPath());
+        $allowedMimeTypes = ['image/jpeg', 'image/png'];
+
+        if (! $imageInfo || ! in_array($imageInfo['mime'] ?? null, $allowedMimeTypes, true)) {
+            return back()->withErrors(['passport_photo' => 'The passport photograph must be a valid JPG or PNG image.']);
+        }
+
+        $mime = $imageInfo['mime'];
+        $extension = $mime === 'image/jpeg' ? 'jpg' : 'png';
+        $directory = 'hr/employees/'.$employee->employee_id.'/passport';
+        $oldPath = $employee->passport_photo_path;
+        $storedName = $file->storeAs($directory, Str::uuid()->toString().'.'.$extension, 'local');
+
+        if (! $storedName) {
+            throw new \RuntimeException('Unable to store passport photograph.');
+        }
+
+        $employee->update([
+            'passport_photo_path' => $storedName,
+            'passport_photo_original_name' => $file->getClientOriginalName(),
+            'passport_photo_mime' => $mime,
+            'passport_photo_size' => $file->getSize(),
+        ]);
+
+        if ($oldPath && $oldPath !== $storedName) {
+            Storage::disk('local')->delete($oldPath);
+        }
+
+        return back()->with('success', 'Passport photograph uploaded successfully.');
+    }
+
+    public function deletePassportPhoto(Employee $employee)
+    {
+        $oldPath = $employee->passport_photo_path;
+        if ($oldPath) {
+            Storage::disk('local')->delete($oldPath);
+        }
+
+        $employee->update([
+            'passport_photo_path' => null,
+            'passport_photo_original_name' => null,
+            'passport_photo_mime' => null,
+            'passport_photo_size' => null,
+        ]);
+
+        return back()->with('success', 'Passport photograph removed.');
+    }
+
+    public function passportPhoto(Employee $employee): Response
+    {
+        $path = $employee->passport_photo_path;
+        $allowedPrefix = 'hr/employees/'.$employee->employee_id.'/passport/';
+
+        if (! $path || ! str_starts_with($path, $allowedPrefix)) {
+            abort(404, 'Passport photograph not found.');
+        }
+
+        $disk = Storage::disk('local');
+        if (! $disk->exists($path)) {
+            abort(404, 'Passport photograph not found.');
+        }
+
+        $contents = $disk->get($path);
+
+        return response($contents, 200, [
+            'Content-Type' => $employee->passport_photo_mime ?: 'application/octet-stream',
+            'Content-Disposition' => 'inline; filename="'.basename($path).'"',
+            'Cache-Control' => 'private, no-store',
+        ]);
+    }
+
     public function destroy(Employee $employee)
     {
         $employeeId = $employee->employee_id;
@@ -202,7 +291,6 @@ class EmployeeController extends Controller
     protected function storeEmployeeDocuments(Employee $employee, Request $request): void
     {
         $rules = [
-            'passport_photo' => ['nullable', 'file', 'mimes:jpg,jpeg,png', 'max:2048'],
             'cv' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
             'certificates' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
             'identification_document' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],

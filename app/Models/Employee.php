@@ -18,6 +18,8 @@ class Employee extends Model
         'department_id', 'position_id', 'reporting_manager_id', 'employment_type',
         'employment_date', 'probation_start_date', 'probation_end_date',
         'employment_status', 'confirmation_status',
+        'passport_photo_path', 'passport_photo_original_name',
+        'passport_photo_mime', 'passport_photo_size',
     ];
 
     protected function casts(): array
