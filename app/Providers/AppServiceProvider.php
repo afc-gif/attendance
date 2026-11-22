@@ -6,12 +6,13 @@ use App\Models\AttendanceSetting;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Passkeys\Passkeys;
 
 class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        Passkeys::ignoreRoutes();
     }
 
     public function boot(): void
@@ -36,7 +37,7 @@ class AppServiceProvider extends ServiceProvider
         try {
             $tz = AttendanceSetting::get('timezone', config('app.timezone', 'UTC'));
 
-            if (!empty($tz) && in_array($tz, \DateTimeZone::listIdentifiers(), true)) {
+            if (! empty($tz) && in_array($tz, \DateTimeZone::listIdentifiers(), true)) {
                 config(['app.timezone' => $tz]);
                 date_default_timezone_set($tz);
                 Carbon::setTestNow(null); // clear any test mock

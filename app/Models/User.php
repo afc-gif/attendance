@@ -5,10 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Passkeys\Contracts\PasskeyUser;
+use Laravel\Passkeys\PasskeyAuthenticatable;
 
-class User extends Authenticatable
+class User extends Authenticatable implements PasskeyUser
 {
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, PasskeyAuthenticatable;
 
     protected $fillable = [
         'name',
@@ -102,6 +104,16 @@ class User extends Authenticatable
         return $this->role === 'afc_staff';
     }
 
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === 'super_admin';
+    }
+
+    public function hrEmployee()
+    {
+        return $this->hasOne(Employee::class, 'user_id');
+    }
+
     public function isArtsciStaff(): bool
     {
         return $this->role === 'artsci_staff';
@@ -115,6 +127,16 @@ class User extends Authenticatable
     public function isApproved(): bool
     {
         return $this->status === 'approved';
+    }
+
+    public function getPasskeyUsername(): string
+    {
+        return $this->hrEmployee?->employee_id ?? (string) $this->getAuthIdentifier();
+    }
+
+    public function getPasskeyDisplayName(): string
+    {
+        return $this->hrEmployee?->employee_id ?? (string) $this->getAuthIdentifier();
     }
 
     public function getRoleLabelAttribute(): string

@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
 
 class AuthController extends Controller
 {
@@ -15,6 +14,7 @@ class AuthController extends Controller
         if (Auth::check()) {
             /** @var User $user */
             $user = Auth::user();
+
             return $user->isAdmin()
                 ? redirect()->route('admin.attendance.index')
                 : redirect()->route('attendance.dashboard');
@@ -36,8 +36,17 @@ class AuthController extends Controller
             /** @var User $user */
             $user = Auth::user();
 
+            if (! $user->isAdmin()) {
+                Auth::logout();
+
+                return back()->withErrors([
+                    'email' => 'Staff sign in with their employee ID and registered device.',
+                ])->onlyInput('email');
+            }
+
             if ($user->isPending()) {
                 Auth::logout();
+
                 return back()->withErrors(['email' => 'Your staff account is pending administrator approval. Please wait for an admin to approve your account.']);
             }
 
@@ -59,6 +68,7 @@ class AuthController extends Controller
         if (Auth::check()) {
             /** @var User $user */
             $user = Auth::user();
+
             return $user->isAdmin()
                 ? redirect()->route('admin.attendance.index')
                 : redirect()->route('attendance.dashboard');
@@ -69,22 +79,8 @@ class AuthController extends Controller
 
     public function register(Request $request)
     {
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
-            'role' => ['nullable', 'string', 'in:afc_staff,artsci_staff'],
-        ]);
-
-        $user = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => Hash::make($validated['password']),
-            'role' => $validated['role'] ?? 'afc_staff',
-            'status' => 'pending', // Requires Admin Approval
-        ]);
-
-        return redirect()->route('login')->with('success', 'Registration submitted successfully! Your account is pending administrator approval before you can sign in.');
+        return redirect()->route('register')
+            ->with('status', 'Staff accounts are created by HR. Contact HR for your employee ID.');
     }
 
     public function logout(Request $request)

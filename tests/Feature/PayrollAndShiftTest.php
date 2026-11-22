@@ -5,7 +5,7 @@ namespace Tests\Feature;
 use App\Models\AttendanceCredential;
 use App\Models\AttendanceNetwork;
 use App\Models\AttendanceRecord;
-use App\Models\PayrollArchive;
+use App\Models\Employee;
 use App\Models\SalaryDeduction;
 use App\Models\Shift;
 use App\Models\User;
@@ -21,7 +21,7 @@ class PayrollAndShiftTest extends TestCase
     protected function createAdmin(): User
     {
         return User::factory()->create([
-            'role'   => 'admin',
+            'role' => 'admin',
             'status' => 'approved',
         ]);
     }
@@ -29,10 +29,21 @@ class PayrollAndShiftTest extends TestCase
     protected function createStaff(string $role = 'artsci_staff', float $salary = 150000.00): User
     {
         $user = User::factory()->create([
-            'role'   => $role,
+            'role' => $role,
             'status' => 'approved',
         ]);
 
+        $company = $role === 'artsci_staff' ? 'ARTSCI' : 'AFC';
+        Employee::create([
+            'user_id' => $user->id,
+            'employee_id' => ($company === 'ARTSCI' ? 'ART' : 'AFC').'-TEST-'.$user->id,
+            'company' => $company,
+            'first_name' => 'Test',
+            'last_name' => 'Staff',
+            'employment_type' => 'full_time',
+            'employment_status' => 'active',
+            'confirmation_status' => 'confirmed',
+        ]);
         $user->getOrCreateStaffProfile()->update([
             'base_salary' => $salary,
             'off_days' => [0], // Sunday off
@@ -44,14 +55,23 @@ class PayrollAndShiftTest extends TestCase
 
     protected function registerCredentialForUser(User $user): AttendanceCredential
     {
-        return AttendanceCredential::create([
+        $credentialId = 'cred_'.$user->id.'_key';
+        $credential = AttendanceCredential::create([
             'user_id' => $user->id,
-            'credential_id' => 'cred_' . $user->id . '_key',
-            'public_key' => 'pubkey_' . $user->id,
+            'credential_id' => $credentialId,
+            'public_key' => 'pubkey_'.$user->id,
             'device_name' => 'Staff Mobile Device',
             'is_active' => true,
             'approval_status' => 'approved',
         ]);
+        $user->passkeys()->create([
+            'name' => 'Staff Mobile Device',
+            'credential_id' => $credentialId,
+            'credential' => [],
+        ]);
+        session(['staff_passkey_credential_id' => $credential->id]);
+
+        return $credential;
     }
 
     protected function createApprovedNetwork(): AttendanceNetwork
@@ -80,7 +100,7 @@ class PayrollAndShiftTest extends TestCase
             'status' => 'present',
         ]);
 
-        $payrollService = new PayrollService();
+        $payrollService = new PayrollService;
         $deduction = $payrollService->evaluateAndApplyLatenessPenalty($record, $staff);
 
         $this->assertNull($deduction);
@@ -97,18 +117,9 @@ class PayrollAndShiftTest extends TestCase
         // Monday 10:30 AM (expected resumption 08:00 AM + 15 mins)
         Carbon::setTestNow(Carbon::parse('2026-09-21 10:30:00', 'Africa/Lagos'));
 
-        $challenge = 'test_challenge_123';
-        session(['webauthn_challenge' => $challenge]);
-        $clientDataJson = \App\Services\WebAuthnService::base64UrlEncode(json_encode([
-            'challenge' => \App\Services\WebAuthnService::base64UrlEncode($challenge)
-        ]));
-
         $response = $this->actingAs($staff)
             ->withServerVariables(['REMOTE_ADDR' => '127.0.0.1'])
-            ->postJson(route('attendance.check-in'), [
-                'credential_id' => 'cred_' . $staff->id . '_key',
-                'client_data_json' => $clientDataJson,
-            ]);
+            ->postJson(route('attendance.check-in'), []);
 
         $response->assertStatus(200);
         $response->assertJson(['status' => 'late']);
@@ -135,7 +146,7 @@ class PayrollAndShiftTest extends TestCase
             'reason' => 'Late check-in',
         ]);
 
-        $payrollService = new PayrollService();
+        $payrollService = new PayrollService;
         $balanceBefore = $payrollService->calculateMonthlyBalance($staff, '2026-09');
         $this->assertEquals(149500.00, $balanceBefore['net_salary']);
 
@@ -223,7 +234,7 @@ class PayrollAndShiftTest extends TestCase
             'status' => 'present',
         ]);
 
-        $payrollService = new PayrollService();
+        $payrollService = new PayrollService;
         $deduction = $payrollService->evaluateAndApplyLatenessPenalty($record, $staff);
 
         $this->assertNull($deduction);
@@ -255,7 +266,7 @@ class PayrollAndShiftTest extends TestCase
             'pay_period' => '2026-09',
         ]);
 
-        $payrollService = new PayrollService();
+        $payrollService = new PayrollService;
         $balance = $payrollService->calculateMonthlyBalance($staff, '2026-09');
         $this->assertEquals(177500.00, $balance['net_salary']);
         $this->assertEquals(2500.00, $balance['total_deductions']);

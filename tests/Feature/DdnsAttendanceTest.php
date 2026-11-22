@@ -2,10 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Attendance\AttendanceController;
 use App\Models\AttendanceCredential;
 use App\Models\AttendanceNetwork;
+use App\Models\AttendanceRecord;
+use App\Models\Employee;
 use App\Models\User;
+use App\Services\PublicIpService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -16,20 +21,33 @@ class DdnsAttendanceTest extends TestCase
 
     protected function createStaff(array $overrides = []): User
     {
-        return User::create(array_merge([
+        $user = User::create(array_merge([
             'name' => 'Test Staff',
-            'email' => 'staff_' . Str::random(6) . '@example.com',
+            'email' => 'staff_'.Str::random(6).'@example.com',
             'password' => bcrypt('password123'),
             'role' => 'afc_staff',
             'status' => 'approved',
         ], $overrides));
+
+        Employee::create([
+            'user_id' => $user->id,
+            'employee_id' => 'AFC-TEST-'.Str::upper(Str::random(8)),
+            'company' => 'AFC',
+            'first_name' => 'Test',
+            'last_name' => 'Staff',
+            'employment_type' => 'full_time',
+            'employment_status' => 'active',
+            'confirmation_status' => 'confirmed',
+        ]);
+
+        return $user;
     }
 
     protected function createAdmin(array $overrides = []): User
     {
         return User::create(array_merge([
             'name' => 'Test Admin',
-            'email' => 'admin_' . Str::random(6) . '@example.com',
+            'email' => 'admin_'.Str::random(6).'@example.com',
             'password' => bcrypt('password123'),
             'role' => 'admin',
             'status' => 'approved',
@@ -38,15 +56,24 @@ class DdnsAttendanceTest extends TestCase
 
     protected function registerCredential(User $user): AttendanceCredential
     {
-        return AttendanceCredential::create([
+        $credentialId = 'cred_'.Str::random(8);
+        $credential = AttendanceCredential::create([
             'user_id' => $user->id,
-            'credential_id' => 'cred_' . Str::random(8),
+            'credential_id' => $credentialId,
             'public_key' => 'pubkey_mock',
-            'device_name' => "Staff Device",
+            'device_name' => 'Staff Device',
             'is_active' => true,
             'approval_status' => 'approved',
             'registered_at' => now(),
         ]);
+        $user->passkeys()->create([
+            'name' => 'Staff Device',
+            'credential_id' => $credentialId,
+            'credential' => [],
+        ]);
+        session(['staff_passkey_credential_id' => $credential->id]);
+
+        return $credential;
     }
 
     /** 1. Existing static IP attendance validation still works */
@@ -110,10 +137,7 @@ class DdnsAttendanceTest extends TestCase
         // Attempt check-in from unapproved IP 102.89.1.1
         $response = $this->actingAs($staff)
             ->withServerVariables(['REMOTE_ADDR' => '102.89.1.1'])
-            ->postJson(route('attendance.check-in'), [
-                'credential_id' => $cred->credential_id,
-                'client_data_json' => base64_encode(json_encode(['type' => 'webauthn.get'])),
-            ]);
+            ->postJson(route('attendance.check-in'), []);
 
         $response->assertStatus(403);
         $response->assertJson([
@@ -369,7 +393,7 @@ class DdnsAttendanceTest extends TestCase
     {
         $staff = $this->createStaff();
 
-        \App\Models\AttendanceRecord::create([
+        AttendanceRecord::create([
             'user_id' => $staff->id,
             'attendance_date' => now()->toDateString(),
             'check_in_at' => now()->subHours(8),
@@ -381,7 +405,7 @@ class DdnsAttendanceTest extends TestCase
             ->expectsOutputToContain('Completed auto check-out')
             ->assertExitCode(0);
 
-        $record = \App\Models\AttendanceRecord::where('user_id', $staff->id)->first();
+        $record = AttendanceRecord::where('user_id', $staff->id)->first();
         $this->assertNotNull($record->check_out_at);
         $this->assertStringContainsString('Forgotten Check-Out', $record->notes);
     }
@@ -407,10 +431,7 @@ class DdnsAttendanceTest extends TestCase
                 'REMOTE_ADDR' => '203.0.113.195',
                 'HTTP_X_FORWARDED_FOR' => '192.168.0.50',
             ])
-            ->postJson(route('attendance.check-in'), [
-                'credential_id' => $cred->credential_id,
-                'client_data_json' => base64_encode(json_encode(['type' => 'webauthn.get', 'challenge' => 'dummy'])),
-            ]);
+            ->postJson(route('attendance.check-in'), []);
 
         // Must reject with 403 Forbidden because REMOTE_ADDR is untrusted!
         $response->assertStatus(403);
@@ -420,32 +441,32 @@ class DdnsAttendanceTest extends TestCase
     /** 18. Cloudflare CF-Connecting-IP is honored when request is from trusted proxy */
     public function test_cloudflare_connecting_ip_is_used_when_from_trusted_proxy(): void
     {
-        $request = \Illuminate\Http\Request::create('/attendance', 'GET', [], [], [], [
+        $request = Request::create('/attendance', 'GET', [], [], [], [
             'REMOTE_ADDR' => '127.0.0.1',
             'HTTP_CF_CONNECTING_IP' => '102.89.45.12',
             'HTTP_X_FORWARDED_FOR' => '102.89.45.12',
         ]);
 
-        $resolvedIp = \App\Http\Controllers\Attendance\AttendanceController::resolveClientIp($request);
+        $resolvedIp = AttendanceController::resolveClientIp($request);
         $this->assertEquals('102.89.45.12', $resolvedIp);
     }
 
     /** 19. Spoofed CF-Connecting-IP from untrusted direct connection is ignored */
     public function test_spoofed_cf_connecting_ip_from_untrusted_direct_connection_is_ignored(): void
     {
-        $request = \Illuminate\Http\Request::create('/attendance', 'GET', [], [], [], [
+        $request = Request::create('/attendance', 'GET', [], [], [], [
             'REMOTE_ADDR' => '198.51.100.55',
             'HTTP_CF_CONNECTING_IP' => '102.89.45.12',
         ]);
 
-        $resolvedIp = \App\Http\Controllers\Attendance\AttendanceController::resolveClientIp($request);
+        $resolvedIp = AttendanceController::resolveClientIp($request);
         $this->assertEquals('198.51.100.55', $resolvedIp);
     }
 
     /** 20. PublicIpService correctly validates public IPs and rejects private ranges */
     public function test_public_ip_service_validates_public_ips_and_rejects_private(): void
     {
-        $service = new \App\Services\PublicIpService();
+        $service = new PublicIpService;
 
         // Valid public IPv4
         $this->assertTrue($service->isValidPublicIp('102.89.45.12'));
@@ -469,7 +490,7 @@ class DdnsAttendanceTest extends TestCase
         ]);
 
         // Mock PublicIpService to return specific IP
-        $mockService = $this->createMock(\App\Services\PublicIpService::class);
+        $mockService = $this->createMock(PublicIpService::class);
         $mockService->method('detectPublicIpWithDetails')->willReturn([
             'success' => true,
             'ip' => '102.89.45.99',
@@ -477,7 +498,7 @@ class DdnsAttendanceTest extends TestCase
             'latency_ms' => 45,
             'error' => null,
         ]);
-        $this->app->instance(\App\Services\PublicIpService::class, $mockService);
+        $this->app->instance(PublicIpService::class, $mockService);
 
         $this->artisan('attendance:update-office-ip')
             ->expectsOutputToContain('Successfully updated Network')

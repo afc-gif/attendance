@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Middleware\EnsureStaffPasskeySession;
+use App\Http\Middleware\SuperAdminOnly;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -12,6 +14,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->alias([
+            'super_admin' => SuperAdminOnly::class,
+            'staff.passkey' => EnsureStaffPasskeySession::class,
+        ]);
         $rawTrustedProxies = env('TRUSTED_PROXIES', '127.0.0.1,::1');
         $trustedProxies = array_values(array_filter(array_map(
             static fn (string $proxy): string => trim($proxy),
@@ -32,6 +38,6 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*'),
+            fn (Request $request) => $request->expectsJson() || $request->is('api/*'),
         );
     })->create();
