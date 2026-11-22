@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Employee;
+use App\Models\EmployeeDocument;
 use App\Models\HrDepartment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -24,6 +25,7 @@ class HrManagementTest extends TestCase
 
     public function test_only_super_admin_can_access_hr_routes(): void
     {
+        /** @var User $admin */
         $admin = User::factory()->create(['role' => 'admin', 'status' => 'approved']);
 
         $this->actingAs($admin)
@@ -139,11 +141,14 @@ class HrManagementTest extends TestCase
                 'document' => UploadedFile::fake()->create('passport.pdf', 100, 'application/pdf'),
             ])->assertRedirect();
 
+        /** @var EmployeeDocument $document */
         $document = $employee->documents()->first();
         $this->assertNotNull($document);
-        Storage::disk('local')->assertExists($document->stored_name);
+        $this->assertTrue(Storage::disk('local')->exists($document->stored_name));
 
-        $this->actingAs(User::factory()->create(['role' => 'admin']))
+        /** @var User $admin */
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin)
             ->get(route('admin.hr.documents.download', $document))
             ->assertForbidden();
 

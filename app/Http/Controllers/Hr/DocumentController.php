@@ -8,6 +8,7 @@ use App\Models\EmployeeDocument;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DocumentController extends Controller
 {
@@ -58,14 +59,18 @@ class DocumentController extends Controller
         return back()->with('success', 'Document uploaded securely.');
     }
 
-    public function download(EmployeeDocument $document)
+    public function download(EmployeeDocument $document): StreamedResponse
     {
         $disk = Storage::disk($document->disk);
         if (! $disk->exists($document->stored_name)) {
             abort(404, 'Document not found.');
         }
 
-        return $disk->download($document->stored_name, $document->original_name, [
+        $contents = $disk->get($document->stored_name);
+
+        return response()->streamDownload(function () use ($contents) {
+            echo $contents;
+        }, $document->original_name, [
             'Content-Type' => $document->mime_type,
         ]);
     }
