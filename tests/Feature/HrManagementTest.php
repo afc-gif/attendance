@@ -30,6 +30,7 @@ class HrManagementTest extends TestCase
     {
         /** @var User $admin */
         $admin = User::factory()->create(['role' => 'admin', 'status' => 'approved']);
+        /** @var User $hr */
         $hr = User::factory()->create(['role' => 'hr', 'status' => 'approved']);
 
         $this->actingAs($admin)
@@ -69,6 +70,7 @@ class HrManagementTest extends TestCase
             ->get(route('admin.deployments.index'))
             ->assertForbidden();
 
+        /** @var User $staff */
         $staff = User::factory()->create(['role' => 'artsci_staff', 'status' => 'approved']);
         $this->actingAs($staff)
             ->get(route('admin.payroll.index'))
@@ -81,6 +83,7 @@ class HrManagementTest extends TestCase
 
     public function test_hr_role_login_redirects_directly_to_hr_panel(): void
     {
+        /** @var User $hr */
         $hr = User::factory()->create([
             'email' => 'hr@example.test',
             'password' => Hash::make('HR password 123!'),
@@ -99,7 +102,9 @@ class HrManagementTest extends TestCase
     public function test_only_super_admin_can_assign_or_manage_the_hr_role(): void
     {
         $superAdmin = $this->superAdmin();
+        /** @var User $staff */
         $staff = User::factory()->create(['role' => 'admin', 'status' => 'approved']);
+        /** @var User $hr */
         $hr = User::factory()->create(['role' => 'hr', 'status' => 'approved']);
 
         $this->actingAs($superAdmin)
@@ -119,6 +124,7 @@ class HrManagementTest extends TestCase
 
         $this->assertDatabaseHas('users', ['id' => $staff->id, 'role' => 'hr']);
 
+        /** @var User $admin */
         $admin = User::factory()->create(['role' => 'admin', 'status' => 'approved']);
         $this->actingAs($admin)
             ->get(route('admin.users.create'))

@@ -173,8 +173,9 @@ class UserManagementController extends Controller
     private function assignableRoles(): array
     {
         $roles = ['admin', 'afc_staff', 'artsci_staff'];
+        $actor = Auth::user();
 
-        if (Auth::user()?->isSuperAdmin()) {
+        if ($actor instanceof User && $actor->isSuperAdmin()) {
             $roles[] = 'hr';
         }
 
@@ -183,8 +184,12 @@ class UserManagementController extends Controller
 
     private function authorizeHrRoleManagement(User $user): void
     {
-        if ($user->isHr() && ! Auth::user()?->isSuperAdmin()) {
-            abort(403, 'Only Super Admin can manage HR accounts.');
+        if ($user->isHr()) {
+            $actor = Auth::user();
+
+            if (! ($actor instanceof User) || ! $actor->isSuperAdmin()) {
+                abort(403, 'Only Super Admin can manage HR accounts.');
+            }
         }
     }
 
