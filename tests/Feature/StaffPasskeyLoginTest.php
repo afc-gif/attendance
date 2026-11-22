@@ -64,7 +64,7 @@ class StaffPasskeyLoginTest extends TestCase
             ->assertOk()
             ->assertSee('Employee ID')
             ->assertSee('Register this device')
-            ->assertSee('Administrator sign-in');
+            ->assertSee('Administrator / HR sign-in');
     }
 
     public function test_hr_employee_id_can_start_first_device_registration(): void

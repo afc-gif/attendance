@@ -17,7 +17,7 @@ class UserManagementController extends Controller
     {
         /** @var User $user */
         $user = Auth::user();
-        if (!$user || !$user->isAdmin()) {
+        if (! $user || ! $user->isAdmin()) {
             abort(403, 'Unauthorized. Restricted to administrators.');
         }
     }
@@ -35,7 +35,7 @@ class UserManagementController extends Controller
         if ($search !== '') {
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
+                    ->orWhere('email', 'like', "%{$search}%");
             });
         }
 
@@ -73,6 +73,7 @@ class UserManagementController extends Controller
     public function create()
     {
         $this->authorizeAdmin();
+
         return view('admin.users.create');
     }
 
@@ -84,7 +85,7 @@ class UserManagementController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
-            'role' => ['required', 'string', 'in:admin,afc_staff,artsci_staff'],
+            'role' => ['required', 'string', Rule::in($this->assignableRoles())],
             'status' => ['required', 'string', 'in:pending,approved,rejected,suspended'],
         ]);
 
@@ -96,7 +97,7 @@ class UserManagementController extends Controller
             'status' => $validated['status'],
         ]);
 
-        return redirect()->route('admin.users.index')->with('success', "User account for {$user->name} created successfully as " . $user->role_label . ".");
+        return redirect()->route('admin.users.index')->with('success', "User account for {$user->name} created successfully as ".$user->role_label.'.');
     }
 
     public function show(User $user)
@@ -119,9 +120,9 @@ class UserManagementController extends Controller
 
         $stats = [
             'total_present' => $allRecords->whereNotNull('check_in_at')->count(),
-            'late_week' => $allRecords->filter(fn($r) => $r->status === 'late' && $r->attendance_date?->between($startOfWeek, $endOfWeek))->count(),
-            'late_month' => $allRecords->filter(fn($r) => $r->status === 'late' && $r->attendance_date?->month === $currentMonth && $r->attendance_date?->year === $currentYear)->count(),
-            'late_year' => $allRecords->filter(fn($r) => $r->status === 'late' && $r->attendance_date?->year === $currentYear)->count(),
+            'late_week' => $allRecords->filter(fn ($r) => $r->status === 'late' && $r->attendance_date?->between($startOfWeek, $endOfWeek))->count(),
+            'late_month' => $allRecords->filter(fn ($r) => $r->status === 'late' && $r->attendance_date?->month === $currentMonth && $r->attendance_date?->year === $currentYear)->count(),
+            'late_year' => $allRecords->filter(fn ($r) => $r->status === 'late' && $r->attendance_date?->year === $currentYear)->count(),
             'late_all_time' => $allRecords->where('status', 'late')->count(),
         ];
 
@@ -135,17 +136,20 @@ class UserManagementController extends Controller
     public function edit(User $user)
     {
         $this->authorizeAdmin();
+        $this->authorizeHrRoleManagement($user);
+
         return view('admin.users.edit', compact('user'));
     }
 
     public function update(Request $request, User $user)
     {
         $this->authorizeAdmin();
+        $this->authorizeHrRoleManagement($user);
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
-            'role' => ['required', 'string', 'in:admin,afc_staff,artsci_staff'],
+            'role' => ['required', 'string', Rule::in($this->assignableRoles())],
             'status' => ['required', 'string', 'in:pending,approved,rejected,suspended'],
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
         ]);
@@ -157,18 +161,42 @@ class UserManagementController extends Controller
             'status' => $validated['status'],
         ];
 
-        if (!empty($validated['password'])) {
+        if (! empty($validated['password'])) {
             $updateData['password'] = Hash::make($validated['password']);
         }
 
         $user->update($updateData);
 
-        return redirect()->route('admin.users.show', $user)->with('success', "User profile for {$user->name} updated successfully. Role set to: " . $user->role_label . ".");
+        return redirect()->route('admin.users.show', $user)->with('success', "User profile for {$user->name} updated successfully. Role set to: ".$user->role_label.'.');
+    }
+
+    private function assignableRoles(): array
+    {
+        $roles = ['admin', 'afc_staff', 'artsci_staff'];
+        $actor = Auth::user();
+
+        if ($actor instanceof User && $actor->isSuperAdmin()) {
+            $roles[] = 'hr';
+        }
+
+        return $roles;
+    }
+
+    private function authorizeHrRoleManagement(User $user): void
+    {
+        if ($user->isHr()) {
+            $actor = Auth::user();
+
+            if (! ($actor instanceof User) || ! $actor->isSuperAdmin()) {
+                abort(403, 'Only Super Admin can manage HR accounts.');
+            }
+        }
     }
 
     public function updateStatus(Request $request, User $user)
     {
         $this->authorizeAdmin();
+        $this->authorizeHrRoleManagement($user);
 
         $validated = $request->validate([
             'status' => ['required', 'string', 'in:pending,approved,rejected,suspended'],
@@ -177,12 +205,14 @@ class UserManagementController extends Controller
         $user->update(['status' => $validated['status']]);
 
         $statusLabel = ucfirst($validated['status']);
+
         return back()->with('success', "{$user->name}'s account has been set to {$statusLabel}.");
     }
 
     public function destroy(User $user)
     {
         $this->authorizeAdmin();
+        $this->authorizeHrRoleManagement($user);
 
         /** @var User $actor */
         $actor = Auth::user();

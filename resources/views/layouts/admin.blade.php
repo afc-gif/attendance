@@ -43,13 +43,13 @@
             </button>
 
             <!-- Brand Logo & Title -->
-            <a href="{{ route('admin.attendance.index') }}" class="flex items-center gap-3">
+            <a href="{{ auth()->user()->isHr() ? route('admin.hr.dashboard') : route('admin.attendance.index') }}" class="flex items-center gap-3">
                 <div class="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center font-black text-white text-base shadow">
                     SA
                 </div>
                 <div class="hidden sm:block">
                     <h1 class="font-extrabold text-base text-white leading-none">Staff Attendance</h1>
-                    <span class="text-[10px] text-indigo-300 uppercase tracking-widest font-bold">Admin Management Console</span>
+                    <span class="text-[10px] text-indigo-300 uppercase tracking-widest font-bold">{{ auth()->user()->isHr() ? 'HR Management Console' : 'Admin Management Console' }}</span>
                 </div>
             </a>
         </div>
@@ -81,8 +81,8 @@
         <aside id="admin-sidebar" class="w-64 bg-[#0f172a] text-white flex-shrink-0 flex flex-col justify-between p-4 border-r border-slate-800 sidebar-transition fixed lg:sticky lg:top-0 inset-y-0 left-0 z-30 transform -translate-x-full lg:translate-x-0 top-16 h-[calc(100vh-4rem)] lg:h-full overflow-y-auto">
             <div class="space-y-6">
                 <div>
-                    <div class="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 px-3 mb-2">Main Navigation</div>
                     <nav class="space-y-1">
+                    <div class="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 px-3 mb-2">Main Navigation</div>
 
                         <!-- Overview -->
                         <a href="{{ route('admin.attendance.index') }}" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-extrabold transition {{ request()->routeIs('admin.attendance.index') ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
@@ -97,10 +97,12 @@
                         </a>
 
                         <!-- User Management -->
-                        <a href="{{ route('admin.users.index') }}" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-extrabold transition {{ request()->routeIs('admin.users.*') ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
-                            <svg class="w-4 h-4 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-                            <span>User Management</span>
-                        </a>
+                        @unless(auth()->user()->isHr())
+                            <a href="{{ route('admin.users.index') }}" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-extrabold transition {{ request()->routeIs('admin.users.*') ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                                <svg class="w-4 h-4 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                                <span>User Management</span>
+                            </a>
+                        @endunless
 
                         <!-- Payroll & Salary -->
                         <a href="{{ route('admin.payroll.index') }}" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-extrabold transition {{ request()->routeIs('admin.payroll.*') ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
@@ -133,7 +135,7 @@
                             </a>
                         @endif
 
-                        @if(auth()->user()?->isSuperAdmin())
+                        @if(auth()->user()?->isSuperAdmin() || auth()->user()?->isHr())
                             <div class="pt-3 mt-3 border-t border-slate-800">
                                 <div class="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 px-3 mb-2">HR Management</div>
                                 <a href="{{ route('admin.hr.dashboard') }}" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-extrabold transition {{ request()->routeIs('admin.hr.dashboard') ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">

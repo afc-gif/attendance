@@ -22,7 +22,7 @@
               class="space-y-3">
             @csrf
             <label for="employee_id" class="block text-xs font-bold uppercase tracking-wider text-slate-700">Employee ID</label>
-            <input id="employee_id" name="employee_id" type="text" value="{{ old('employee_id') }}" required maxlength="50" autocomplete="username" autocapitalize="characters" placeholder="ART-000001" class="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm">
+            <input id="employee_id" name="employee_id" type="text" value="{{ old('employee_id') }}" required maxlength="50" autocomplete="username" autocapitalize="characters" placeholder="ART-483921" class="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm">
             <button type="button" id="staff-passkey-login" class="w-full bg-[#0f172a] hover:bg-slate-800 text-white font-extrabold text-sm py-3.5 px-4 rounded-xl shadow-md">Sign in with this device</button>
             <button type="button" id="staff-passkey-register" class="w-full border border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-bold text-sm py-3 px-4 rounded-xl">First time? Register this device</button>
         </form>
@@ -30,7 +30,7 @@
     </section>
 
     <details class="mt-7 border-t border-slate-100 pt-4">
-        <summary class="cursor-pointer text-xs font-bold text-slate-600">Administrator sign-in</summary>
+        <summary class="cursor-pointer text-xs font-bold text-slate-600">Administrator / HR sign-in</summary>
         <form method="POST" action="{{ route('login') }}" class="space-y-3 mt-4">
             @csrf
             <label for="email" class="block text-xs font-bold uppercase tracking-wider text-slate-700">Email Address</label>

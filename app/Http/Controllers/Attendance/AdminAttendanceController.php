@@ -23,7 +23,7 @@ class AdminAttendanceController extends Controller
         /** @var User $user */
         $user = Auth::user();
 
-        if (! $user || ! $user->isAdmin()) {
+        if (! $user || ! $user->canAccessAdminConsole()) {
             abort(403, 'Unauthorized. Attendance management is restricted to authorized administrators.');
         }
     }

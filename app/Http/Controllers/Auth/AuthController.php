@@ -15,9 +15,7 @@ class AuthController extends Controller
             /** @var User $user */
             $user = Auth::user();
 
-            return $user->isAdmin()
-                ? redirect()->route('admin.attendance.index')
-                : redirect()->route('attendance.dashboard');
+            return $this->redirectFor($user);
         }
 
         return view('auth.login');
@@ -36,7 +34,7 @@ class AuthController extends Controller
             /** @var User $user */
             $user = Auth::user();
 
-            if (! $user->isAdmin()) {
+            if (! $user->isAdmin() && ! $user->isHr()) {
                 Auth::logout();
 
                 return back()->withErrors([
@@ -50,7 +48,16 @@ class AuthController extends Controller
                 return back()->withErrors(['email' => 'Your staff account is pending administrator approval. Please wait for an admin to approve your account.']);
             }
 
-            // Smart Redirect: Admins land on Admin Dashboard; Staff land on Staff Portal
+            if ($user->isHr()) {
+                if (! $user->isApproved()) {
+                    Auth::logout();
+
+                    return back()->withErrors(['email' => 'Your HR account is not approved for access.']);
+                }
+
+                return redirect()->route('admin.hr.dashboard');
+            }
+
             if ($user->isAdmin()) {
                 return redirect()->intended(route('admin.attendance.index'));
             }
@@ -69,9 +76,7 @@ class AuthController extends Controller
             /** @var User $user */
             $user = Auth::user();
 
-            return $user->isAdmin()
-                ? redirect()->route('admin.attendance.index')
-                : redirect()->route('attendance.dashboard');
+            return $this->redirectFor($user);
         }
 
         return view('auth.register');
@@ -90,5 +95,16 @@ class AuthController extends Controller
         $request->session()->regenerateToken();
 
         return redirect()->route('login');
+    }
+
+    private function redirectFor(User $user)
+    {
+        if ($user->isHr()) {
+            return redirect()->route('admin.hr.dashboard');
+        }
+
+        return $user->isAdmin()
+            ? redirect()->route('admin.attendance.index')
+            : redirect()->route('attendance.dashboard');
     }
 }

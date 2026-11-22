@@ -48,7 +48,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/admin/deployments/data', [DeploymentMonitorController::class, 'data'])->name('admin.deployments.data');
 
     // Admin Payroll Management Routes
-    Route::prefix('admin/payroll')->name('admin.payroll.')->group(function () {
+    Route::prefix('admin/payroll')->name('admin.payroll.')->middleware('admin.console')->group(function () {
         Route::get('/', [AdminPayrollController::class, 'index'])->name('index');
         Route::post('/staff/{user}', [AdminPayrollController::class, 'updateStaffProfile'])->name('staff.update');
         Route::post('/deductions/manual', [AdminPayrollController::class, 'storeManualDeduction'])->name('deductions.manual');
@@ -57,7 +57,7 @@ Route::middleware(['auth'])->group(function () {
     });
 
     // Admin Shift Template Routes
-    Route::prefix('admin/shifts')->name('admin.shifts.')->group(function () {
+    Route::prefix('admin/shifts')->name('admin.shifts.')->middleware('admin.console')->group(function () {
         Route::get('/', [AdminPayrollController::class, 'shiftsIndex'])->name('index');
         Route::post('/', [AdminPayrollController::class, 'storeShift'])->name('store');
         Route::put('/{shift}', [AdminPayrollController::class, 'updateShift'])->name('update');
@@ -110,8 +110,8 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/{user}', [UserManagementController::class, 'destroy'])->name('destroy');
     });
 
-    // HR Management - server-side restricted to Super Admin.
-    Route::middleware('super_admin')->prefix('admin/hr')->name('admin.hr.')->group(function () {
+    // HR Management - server-side restricted to HR and Super Admin.
+    Route::middleware('hr_access')->prefix('admin/hr')->name('admin.hr.')->group(function () {
         Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
         Route::get('/employees', [EmployeeController::class, 'index'])->name('employees.index');
