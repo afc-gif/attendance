@@ -75,6 +75,14 @@ class HrManagementTest extends TestCase
         $this->assertDatabaseHas('employees', ['employee_id' => 'AFC-000001', 'company' => 'AFC']);
     }
 
+    public function test_super_admin_can_load_employee_creation_form(): void
+    {
+        $this->actingAs($this->superAdmin())
+            ->get(route('admin.hr.employees.create'))
+            ->assertOk()
+            ->assertSee('Personal Information');
+    }
+
     public function test_employee_profile_edit_search_and_department_management_work(): void
     {
         $superAdmin = $this->superAdmin();

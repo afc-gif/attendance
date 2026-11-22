@@ -36,7 +36,17 @@
         <label class="text-xs font-bold text-slate-600">Department<select name="department_id" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg"><option value="">None</option>@foreach($departments as $department)<option value="{{ $department->id }}" @selected(old('department_id', $employee?->department_id) == $department->id)>{{ $department->company }} · {{ $department->name }}</option>@endforeach</select></label>
         <label class="text-xs font-bold text-slate-600">Position<select name="position_id" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg"><option value="">None</option>@foreach($positions as $position)<option value="{{ $position->id }}" @selected(old('position_id', $employee?->position_id) == $position->id)>{{ $position->company }} · {{ $position->title }}</option>@endforeach</select></label>
         <label class="text-xs font-bold text-slate-600">Reporting manager<select name="reporting_manager_id" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg"><option value="">None</option>@foreach($managers as $manager)<option value="{{ $manager->id }}" @selected(old('reporting_manager_id', $employee?->reporting_manager_id) == $manager->id)>{{ $manager->full_name }} ({{ $manager->employee_id }})</option>@endforeach</select></label>
-        <label class="text-xs font-bold text-slate-600">Optional login account<select name="user_id" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg"><option value="">No account linked</option>@if($employee?->user)<option value="{{ $employee->user_id }}" selected>{{ $employee->user->name }}</option>@endif@foreach($users as $user)<option value="{{ $user->id }}" @selected(old('user_id', $employee?->user_id) == $user->id)>{{ $user->name }} · {{ $user->email }}</option>@endforeach</select></label>
+        <label class="text-xs font-bold text-slate-600">Optional login account
+            <select name="user_id" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg">
+                <option value="">No account linked</option>
+                @if($employee?->user)
+                    <option value="{{ $employee->user_id }}" selected>{{ $employee->user->name }}</option>
+                @endif
+                @foreach($users as $user)
+                    <option value="{{ $user->id }}" @selected(old('user_id', $employee?->user_id) == $user->id)>{{ $user->name }} · {{ $user->email }}</option>
+                @endforeach
+            </select>
+        </label>
         <label class="text-xs font-bold text-slate-600">Employment type<select name="employment_type" required class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg">@foreach(['full_time','part_time','contract','intern','temporary'] as $type)<option value="{{ $type }}" @selected(old('employment_type', $employee?->employment_type ?? 'full_time') === $type)>{{ ucfirst(str_replace('_',' ', $type)) }}</option>@endforeach</select></label>
         <label class="text-xs font-bold text-slate-600">Employment date<input type="date" name="employment_date" value="{{ old('employment_date', optional($employee?->employment_date)->format('Y-m-d')) }}" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg"></label>
         <label class="text-xs font-bold text-slate-600">Probation start<input type="date" name="probation_start_date" value="{{ old('probation_start_date', optional($employee?->probation_start_date)->format('Y-m-d')) }}" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg"></label>
