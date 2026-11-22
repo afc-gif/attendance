@@ -1,10 +1,19 @@
 <?php
 
 use App\Http\Controllers\Attendance\AdminAttendanceController as AdminAttendance;
+use App\Http\Controllers\Attendance\AdminPayrollController;
 use App\Http\Controllers\Attendance\AttendanceController;
 use App\Http\Controllers\Attendance\DeploymentMonitorController;
+use App\Http\Controllers\Attendance\StaffPayrollController;
 use App\Http\Controllers\Attendance\UserManagementController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Hr\DashboardController;
+use App\Http\Controllers\Hr\DocumentController;
+use App\Http\Controllers\Hr\EmployeeController;
+use App\Http\Controllers\Hr\EmploymentController;
+use App\Http\Controllers\Hr\OrganizationController;
+use App\Http\Controllers\Hr\ReportController;
+use App\Http\Controllers\Hr\SettingController;
 use Illuminate\Support\Facades\Route;
 
 // Authentication & Self-Registration Routes
@@ -29,7 +38,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/attendance/check-out', [AttendanceController::class, 'checkOut'])->name('attendance.check-out');
 
     // Staff Payroll Statement
-    Route::get('/staff/payroll', [\App\Http\Controllers\Attendance\StaffPayrollController::class, 'index'])->name('staff.payroll.index');
+    Route::get('/staff/payroll', [StaffPayrollController::class, 'index'])->name('staff.payroll.index');
 
     // Administrator-only Deployment Monitor (authorization is enforced in the controller).
     Route::get('/admin/deployments', [DeploymentMonitorController::class, 'index'])->name('admin.deployments.index');
@@ -37,18 +46,18 @@ Route::middleware(['auth'])->group(function () {
 
     // Admin Payroll Management Routes
     Route::prefix('admin/payroll')->name('admin.payroll.')->group(function () {
-        Route::get('/', [\App\Http\Controllers\Attendance\AdminPayrollController::class, 'index'])->name('index');
-        Route::post('/staff/{user}', [\App\Http\Controllers\Attendance\AdminPayrollController::class, 'updateStaffProfile'])->name('staff.update');
-        Route::post('/deductions/manual', [\App\Http\Controllers\Attendance\AdminPayrollController::class, 'storeManualDeduction'])->name('deductions.manual');
-        Route::post('/deductions/{deduction}/waive', [\App\Http\Controllers\Attendance\AdminPayrollController::class, 'waiveDeduction'])->name('deductions.waive');
-        Route::post('/reset', [\App\Http\Controllers\Attendance\AdminPayrollController::class, 'executeReset'])->name('reset');
+        Route::get('/', [AdminPayrollController::class, 'index'])->name('index');
+        Route::post('/staff/{user}', [AdminPayrollController::class, 'updateStaffProfile'])->name('staff.update');
+        Route::post('/deductions/manual', [AdminPayrollController::class, 'storeManualDeduction'])->name('deductions.manual');
+        Route::post('/deductions/{deduction}/waive', [AdminPayrollController::class, 'waiveDeduction'])->name('deductions.waive');
+        Route::post('/reset', [AdminPayrollController::class, 'executeReset'])->name('reset');
     });
 
     // Admin Shift Template Routes
     Route::prefix('admin/shifts')->name('admin.shifts.')->group(function () {
-        Route::get('/', [\App\Http\Controllers\Attendance\AdminPayrollController::class, 'shiftsIndex'])->name('index');
-        Route::post('/', [\App\Http\Controllers\Attendance\AdminPayrollController::class, 'storeShift'])->name('store');
-        Route::put('/{shift}', [\App\Http\Controllers\Attendance\AdminPayrollController::class, 'updateShift'])->name('update');
+        Route::get('/', [AdminPayrollController::class, 'shiftsIndex'])->name('index');
+        Route::post('/', [AdminPayrollController::class, 'storeShift'])->name('store');
+        Route::put('/{shift}', [AdminPayrollController::class, 'updateShift'])->name('update');
     });
 
     // Admin & Management Routes
@@ -96,5 +105,38 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/{user}', [UserManagementController::class, 'update'])->name('update');
         Route::patch('/{user}/status', [UserManagementController::class, 'updateStatus'])->name('status');
         Route::delete('/{user}', [UserManagementController::class, 'destroy'])->name('destroy');
+    });
+
+    // HR Management - server-side restricted to Super Admin.
+    Route::middleware('super_admin')->prefix('admin/hr')->name('admin.hr.')->group(function () {
+        Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+
+        Route::get('/employees', [EmployeeController::class, 'index'])->name('employees.index');
+        Route::get('/employees/create', [EmployeeController::class, 'create'])->name('employees.create');
+        Route::post('/employees', [EmployeeController::class, 'store'])->name('employees.store');
+        Route::get('/employees/{employee}', [EmployeeController::class, 'show'])->name('employees.show');
+        Route::get('/employees/{employee}/edit', [EmployeeController::class, 'edit'])->name('employees.edit');
+        Route::put('/employees/{employee}', [EmployeeController::class, 'update'])->name('employees.update');
+        Route::delete('/employees/{employee}', [EmployeeController::class, 'destroy'])->name('employees.destroy');
+
+        Route::get('/organization', [OrganizationController::class, 'index'])->name('organization.index');
+        Route::post('/departments', [OrganizationController::class, 'storeDepartment'])->name('departments.store');
+        Route::put('/departments/{department}', [OrganizationController::class, 'updateDepartment'])->name('departments.update');
+        Route::patch('/departments/{department}/toggle', [OrganizationController::class, 'toggleDepartment'])->name('departments.toggle');
+        Route::post('/positions', [OrganizationController::class, 'storePosition'])->name('positions.store');
+        Route::put('/positions/{position}', [OrganizationController::class, 'updatePosition'])->name('positions.update');
+        Route::patch('/positions/{position}/toggle', [OrganizationController::class, 'togglePosition'])->name('positions.toggle');
+
+        Route::get('/employment', [EmploymentController::class, 'index'])->name('employment.index');
+
+        Route::get('/documents', [DocumentController::class, 'index'])->name('documents.index');
+        Route::post('/employees/{employee}/documents', [DocumentController::class, 'store'])->name('documents.store');
+        Route::get('/documents/{document}/download', [DocumentController::class, 'download'])->name('documents.download');
+        Route::delete('/documents/{document}', [DocumentController::class, 'destroy'])->name('documents.destroy');
+
+        Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
+        Route::get('/reports/export', [ReportController::class, 'export'])->name('reports.export');
+        Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
+        Route::put('/settings', [SettingController::class, 'update'])->name('settings.update');
     });
 });

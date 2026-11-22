@@ -131,6 +131,33 @@
                                 <span>Deployment Monitor</span>
                             </a>
                         @endif
+
+                        @if(auth()->user()?->isSuperAdmin())
+                            <div class="pt-3 mt-3 border-t border-slate-800">
+                                <div class="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 px-3 mb-2">HR Management</div>
+                                <a href="{{ route('admin.hr.dashboard') }}" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-extrabold transition {{ request()->routeIs('admin.hr.dashboard') ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                                    <span class="w-4 h-4 text-indigo-300">O</span><span>Overview</span>
+                                </a>
+                                <a href="{{ route('admin.hr.employees.index') }}" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-extrabold transition {{ request()->routeIs('admin.hr.employees.*') ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                                    <span class="w-4 h-4 text-indigo-300">E</span><span>Employees</span>
+                                </a>
+                                <a href="{{ route('admin.hr.organization.index') }}" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-extrabold transition {{ request()->routeIs('admin.hr.organization.*') ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                                    <span class="w-4 h-4 text-indigo-300">D</span><span>Departments & Positions</span>
+                                </a>
+                                <a href="{{ route('admin.hr.employment.index') }}" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-extrabold transition {{ request()->routeIs('admin.hr.employment.*') ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                                    <span class="w-4 h-4 text-indigo-300">P</span><span>Employment & Probation</span>
+                                </a>
+                                <a href="{{ route('admin.hr.documents.index') }}" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-extrabold transition {{ request()->routeIs('admin.hr.documents.*') ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                                    <span class="w-4 h-4 text-indigo-300">F</span><span>Documents</span>
+                                </a>
+                                <a href="{{ route('admin.hr.reports.index') }}" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-extrabold transition {{ request()->routeIs('admin.hr.reports.*') ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                                    <span class="w-4 h-4 text-indigo-300">R</span><span>HR Reports</span>
+                                </a>
+                                <a href="{{ route('admin.hr.settings.index') }}" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-extrabold transition {{ request()->routeIs('admin.hr.settings.*') ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                                    <span class="w-4 h-4 text-indigo-300">S</span><span>Settings</span>
+                                </a>
+                            </div>
+                        @endif
                     </nav>
                 </div>
             </div>

@@ -102,6 +102,16 @@ class User extends Authenticatable
         return $this->role === 'afc_staff';
     }
 
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === 'super_admin';
+    }
+
+    public function hrEmployee()
+    {
+        return $this->hasOne(Employee::class, 'user_id');
+    }
+
     public function isArtsciStaff(): bool
     {
         return $this->role === 'artsci_staff';

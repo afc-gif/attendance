@@ -1,0 +1,12 @@
+@extends('layouts.admin')
+@section('title', 'Employment & Probation')
+@section('content')
+<div class="space-y-6">
+    <div><h1 class="text-2xl font-extrabold text-slate-900">Employment & Probation</h1></div>
+    @if($approaching->isNotEmpty())
+    <div class="bg-amber-50 border border-amber-200 rounded-xl p-4"><h2 class="text-sm font-extrabold text-amber-900 mb-2">Approaching Probation Deadlines</h2><div class="flex flex-wrap gap-2">@foreach($approaching as $employee)<a href="{{ route('admin.hr.employees.show', $employee) }}" class="text-xs px-3 py-2 bg-white border border-amber-200 rounded-lg text-amber-900">{{ $employee->full_name }} · {{ $employee->probation_end_date->format('M j, Y') }}</a>@endforeach</div></div>
+    @endif
+    <div class="bg-white p-4 rounded-xl border border-slate-200"><form method="GET" class="flex gap-3"><select name="view" onchange="this.form.submit()" class="px-3 py-2 border border-slate-300 rounded-lg text-xs"><option value="">All Employees</option><option value="probation" @selected(request('view') === 'probation')>On probation</option><option value="confirmed" @selected(request('view') === 'confirmed')>Confirmed</option><option value="inactive" @selected(request('view') === 'inactive')>Inactive</option></select></form></div>
+    <div class="bg-white rounded-xl border border-slate-200 overflow-hidden"><div class="overflow-x-auto"><table class="w-full text-xs"><thead class="bg-slate-100 uppercase text-[10px] text-slate-500"><tr><th class="p-3.5 text-left">Employee</th><th class="p-3.5 text-left">Status</th><th class="p-3.5 text-left">Probation End</th><th class="p-3.5 text-right">Action</th></tr></thead><tbody class="divide-y divide-slate-100">@forelse($employees as $employee)<tr><td class="p-3.5"><div class="font-bold">{{ $employee->full_name }}</div><div class="text-slate-400">{{ $employee->employee_id }}</div></td><td class="p-3.5">{{ ucfirst($employee->confirmation_status) }} · {{ ucfirst($employee->employment_status) }}</td><td class="p-3.5">{{ $employee->probation_end_date?->format('M j, Y') ?? '—' }}</td><td class="p-3.5 text-right"><a href="{{ route('admin.hr.employees.show', $employee) }}" class="text-indigo-600 font-bold">View</a></td></tr>@empty<tr><td colspan="4" class="p-8 text-center text-slate-400">No employee records match this view.</td></tr>@endforelse</tbody></table></div><div class="p-4">{{ $employees->links() }}</div></div>
+</div>
+@endsection
