@@ -60,8 +60,8 @@ class AttendanceFeatureTest extends TestCase
         ]);
     }
 
-    /** 1. Staff can self-register at /register with pending status */
-    public function test_staff_can_self_register_with_pending_status(): void
+    /** 1. Staff registration requires an invitation */
+    public function test_staff_cannot_self_register_without_an_invitation(): void
     {
         $response = $this->post(route('register'), [
             'name' => 'New Staff User',
@@ -71,13 +71,9 @@ class AttendanceFeatureTest extends TestCase
             'role' => 'artsci_staff',
         ]);
 
-        $response->assertRedirect(route('login'));
-        $response->assertSessionHas('success');
-
-        $user = User::where('email', 'newstaff@example.com')->first();
-        $this->assertNotNull($user);
-        $this->assertEquals('pending', $user->status);
-        $this->assertEquals('artsci_staff', $user->role);
+        $response->assertRedirect(route('register'));
+        $response->assertSessionHas('status', 'Staff accounts are invitation-only. Contact HR for an activation link.');
+        $this->assertDatabaseMissing('users', ['email' => 'newstaff@example.com']);
     }
 
     /** 2. Admin can approve a pending staff account and change role */

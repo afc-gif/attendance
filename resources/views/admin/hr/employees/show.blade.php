@@ -57,7 +57,30 @@
                     </form>
                 @endif
             </div>
-            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm text-xs space-y-3"><h2 class="font-extrabold text-sm">Employment</h2><div class="flex justify-between"><span class="text-slate-400">Department</span><strong>{{ $employee->department?->name ?? '—' }}</strong></div><div class="flex justify-between"><span class="text-slate-400">Position</span><strong>{{ $employee->position?->title ?? '—' }}</strong></div><div class="flex justify-between"><span class="text-slate-400">Manager</span><strong>{{ $employee->reportingManager?->full_name ?? '—' }}</strong></div><div class="flex justify-between"><span class="text-slate-400">Status</span><strong>{{ ucfirst($employee->employment_status) }}</strong></div><div class="flex justify-between"><span class="text-slate-400">Confirmation</span><strong>{{ ucfirst($employee->confirmation_status) }}</strong></div><div class="flex justify-between"><span class="text-slate-400">Probation end</span><strong>{{ $employee->probation_end_date?->format('M j, Y') ?? '—' }}</strong></div><div class="flex justify-between"><span class="text-slate-400">Login account</span><strong>{{ $employee->user?->email ?? 'Not activated' }}</strong></div></div>
+            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm text-xs space-y-3">
+                <h2 class="font-extrabold text-sm">Employment</h2>
+                <div class="flex justify-between"><span class="text-slate-400">Department</span><strong>{{ $employee->department?->name ?? '—' }}</strong></div>
+                <div class="flex justify-between"><span class="text-slate-400">Position</span><strong>{{ $employee->position?->title ?? '—' }}</strong></div>
+                <div class="flex justify-between"><span class="text-slate-400">Manager</span><strong>{{ $employee->reportingManager?->full_name ?? '—' }}</strong></div>
+                <div class="flex justify-between"><span class="text-slate-400">Status</span><strong>{{ ucfirst($employee->employment_status) }}</strong></div>
+                <div class="flex justify-between"><span class="text-slate-400">Confirmation</span><strong>{{ ucfirst($employee->confirmation_status) }}</strong></div>
+                <div class="flex justify-between"><span class="text-slate-400">Probation end</span><strong>{{ $employee->probation_end_date?->format('M j, Y') ?? '—' }}</strong></div>
+                <div class="flex justify-between"><span class="text-slate-400">Login account</span><strong>{{ $employee->user?->email ?? 'Not linked' }}</strong></div>
+                @if($employee->user)
+                    <div class="flex justify-between"><span class="text-slate-400">Account status</span><strong>{{ ucfirst($employee->user->status) }}</strong></div>
+                @endif
+                @if($employee->invitation)
+                    <div class="flex justify-between"><span class="text-slate-400">Invitation</span><strong>{{ $employee->invitation->accepted_at ? 'Confirmed' : ($employee->invitation->expires_at->isPast() ? 'Expired' : 'Awaiting confirmation') }}</strong></div>
+                @endif
+                @if(!$employee->user || $employee->user->status === 'pending')
+                    @if($employee->email || $employee->user)
+                        <form method="POST" action="{{ route('admin.hr.employees.invitation.send', $employee) }}" class="pt-2">
+                            @csrf
+                            <button type="submit" class="w-full bg-indigo-600 text-white rounded-lg px-3 py-2 text-xs font-bold">{{ $employee->invitation ? 'Resend Activation Invitation' : 'Send Activation Invitation' }}</button>
+                        </form>
+                    @endif
+                @endif
+            </div>
             <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm"><h2 class="font-extrabold text-sm mb-3">Documents</h2>
                 @forelse($employee->documents as $document)<div class="flex items-center justify-between py-2 text-xs border-b border-slate-100"><div><div class="font-bold">{{ $document->original_name }}</div><div class="text-slate-400">{{ $document->document_type }}</div></div><a href="{{ route('admin.hr.documents.download', $document) }}" class="text-indigo-600 font-bold">Download</a></div>@empty<p class="text-xs text-slate-400">No documents uploaded.</p>@endforelse
                 <form method="POST" action="{{ route('admin.hr.documents.store', $employee) }}" enctype="multipart/form-data" class="mt-4 space-y-2">@csrf<input name="document_type" required placeholder="Document type" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"><input type="file" name="document" required accept=".pdf,.jpg,.jpeg,.png" class="w-full text-xs"><button class="bg-slate-900 text-white rounded-lg px-3 py-2 text-xs font-bold">Upload Securely</button></form>

@@ -2,13 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Mail\EmployeeInvitationMail;
 use App\Models\Employee;
 use App\Models\EmployeeDocument;
+use App\Models\EmployeeInvitation;
 use App\Models\HrDepartment;
 use App\Models\HrPosition;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -73,6 +76,107 @@ class HrManagementTest extends TestCase
         $this->assertDatabaseHas('employees', ['employee_id' => 'ART-000001', 'company' => 'ARTSCI']);
         $this->assertDatabaseHas('employees', ['employee_id' => 'ART-000002', 'company' => 'ARTSCI']);
         $this->assertDatabaseHas('employees', ['employee_id' => 'AFC-000001', 'company' => 'AFC']);
+    }
+
+    public function test_creating_employee_with_email_creates_pending_account_and_sends_invitation(): void
+    {
+        Mail::fake();
+        $superAdmin = $this->superAdmin();
+
+        $this->actingAs($superAdmin)->post(route('admin.hr.employees.store'), [
+            'company' => 'AFC',
+            'first_name' => 'Grace',
+            'last_name' => 'Hopper',
+            'email' => 'grace.hopper@example.test',
+            'employment_type' => 'full_time',
+            'employment_status' => 'active',
+            'confirmation_status' => 'probation',
+        ])->assertRedirect();
+
+        $employee = Employee::where('email', 'grace.hopper@example.test')->firstOrFail();
+        $this->assertNotNull($employee->user);
+        $this->assertSame('afc_staff', $employee->user->role);
+        $this->assertSame('pending', $employee->user->status);
+        $this->assertDatabaseHas('employee_invitations', [
+            'employee_id' => $employee->id,
+            'invited_to' => 'grace.hopper@example.test',
+            'accepted_at' => null,
+        ]);
+        Mail::assertSent(EmployeeInvitationMail::class, fn (EmployeeInvitationMail $mail) => $mail->hasTo('grace.hopper@example.test'));
+    }
+
+    public function test_invitation_confirmation_activates_account_and_logs_employee_in(): void
+    {
+        Mail::fake();
+        $this->actingAs($this->superAdmin())->post(route('admin.hr.employees.store'), [
+            'company' => 'ARTSCI',
+            'first_name' => 'Ada',
+            'last_name' => 'Lovelace',
+            'email' => 'ada.lovelace@example.test',
+            'employment_type' => 'full_time',
+            'employment_status' => 'active',
+            'confirmation_status' => 'probation',
+        ])->assertRedirect();
+
+        $employee = Employee::where('email', 'ada.lovelace@example.test')->firstOrFail();
+        $activationUrl = '';
+        Mail::assertSent(EmployeeInvitationMail::class, function (EmployeeInvitationMail $mail) use (&$activationUrl): bool {
+            $activationUrl = $mail->activationUrl;
+
+            return true;
+        });
+        $token = basename((string) parse_url($activationUrl, PHP_URL_PATH));
+
+        $this->get(route('employee-invitations.show', $token))
+            ->assertOk()
+            ->assertSee('Confirm your staff account');
+
+        $this->post(route('employee-invitations.accept', $token), [
+            'password' => 'A secure password 123!',
+            'password_confirmation' => 'A secure password 123!',
+        ])->assertRedirect(route('attendance.dashboard'));
+
+        $employee->refresh();
+        $employee->user->refresh();
+        $this->assertSame('approved', $employee->user->status);
+        $this->assertNotNull($employee->user->email_verified_at);
+        $this->assertNotNull(EmployeeInvitation::where('employee_id', $employee->id)->value('accepted_at'));
+        $this->assertAuthenticatedAs($employee->user);
+
+        $this->get(route('employee-invitations.show', $token))
+            ->assertStatus(410)
+            ->assertSee('Ask HR to send you a new activation link');
+    }
+
+    public function test_invitation_cannot_activate_an_account_with_a_mismatched_company_role(): void
+    {
+        Mail::fake();
+        $this->actingAs($this->superAdmin())->post(route('admin.hr.employees.store'), [
+            'company' => 'ARTSCI',
+            'first_name' => 'Ada',
+            'last_name' => 'Lovelace',
+            'email' => 'ada.lovelace@example.test',
+            'employment_type' => 'full_time',
+            'employment_status' => 'active',
+            'confirmation_status' => 'probation',
+        ])->assertRedirect();
+
+        $employee = Employee::where('email', 'ada.lovelace@example.test')->firstOrFail();
+        $activationUrl = '';
+        Mail::assertSent(EmployeeInvitationMail::class, function (EmployeeInvitationMail $mail) use (&$activationUrl): bool {
+            $activationUrl = $mail->activationUrl;
+
+            return true;
+        });
+        $token = basename((string) parse_url($activationUrl, PHP_URL_PATH));
+        $employee->user->update(['role' => 'afc_staff']);
+
+        $this->post(route('employee-invitations.accept', $token), [
+            'password' => 'A secure password 123!',
+            'password_confirmation' => 'A secure password 123!',
+        ])->assertSessionHasErrors('invitation');
+
+        $this->assertSame('pending', $employee->user->fresh()->status);
     }
 
     public function test_super_admin_can_load_employee_creation_form(): void

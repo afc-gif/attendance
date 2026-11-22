@@ -7,6 +7,7 @@ use App\Http\Controllers\Attendance\DeploymentMonitorController;
 use App\Http\Controllers\Attendance\StaffPayrollController;
 use App\Http\Controllers\Attendance\UserManagementController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Auth\EmployeeInvitationController;
 use App\Http\Controllers\Hr\DashboardController;
 use App\Http\Controllers\Hr\DocumentController;
 use App\Http\Controllers\Hr\EmployeeController;
@@ -22,6 +23,14 @@ Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/register', [AuthController::class, 'showRegisterForm'])->name('register');
 Route::post('/register', [AuthController::class, 'register']);
+Route::get('/invitation/{token}', [EmployeeInvitationController::class, 'show'])
+    ->where('token', '[A-Za-z0-9]+')
+    ->middleware('throttle:10,1')
+    ->name('employee-invitations.show');
+Route::post('/invitation/{token}', [EmployeeInvitationController::class, 'accept'])
+    ->where('token', '[A-Za-z0-9]+')
+    ->middleware('throttle:10,1')
+    ->name('employee-invitations.accept');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 // Authenticated Staff Routes
@@ -115,6 +124,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/employees', [EmployeeController::class, 'index'])->name('employees.index');
         Route::get('/employees/create', [EmployeeController::class, 'create'])->name('employees.create');
         Route::post('/employees', [EmployeeController::class, 'store'])->name('employees.store');
+        Route::post('/employees/{employee}/invitation', [EmployeeController::class, 'sendInvitation'])->name('employees.invitation.send');
         Route::get('/employees/{employee}', [EmployeeController::class, 'show'])->name('employees.show');
         Route::get('/employees/{employee}/edit', [EmployeeController::class, 'edit'])->name('employees.edit');
         Route::put('/employees/{employee}', [EmployeeController::class, 'update'])->name('employees.update');
