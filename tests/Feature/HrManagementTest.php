@@ -184,9 +184,22 @@ class HrManagementTest extends TestCase
             'confirmation_status' => 'probation',
         ])->assertRedirect();
 
-        $this->assertDatabaseHas('employees', ['employee_id' => 'ART-000001', 'company' => 'ARTSCI']);
-        $this->assertDatabaseHas('employees', ['employee_id' => 'ART-000002', 'company' => 'ARTSCI']);
-        $this->assertDatabaseHas('employees', ['employee_id' => 'AFC-000001', 'company' => 'AFC']);
+        $employees = Employee::whereIn('first_name', ['Ada', 'Alan', 'Katherine'])->get();
+        $employeeIds = $employees->pluck('employee_id');
+
+        $this->assertCount(3, $employees);
+        $this->assertCount(3, $employeeIds->unique());
+
+        foreach ([
+            ['Ada', 'ARTSCI', 'ART'],
+            ['Alan', 'ARTSCI', 'ART'],
+            ['Katherine', 'AFC', 'AFC'],
+        ] as [$firstName, $company, $prefix]) {
+            $employee = Employee::where('first_name', $firstName)->firstOrFail();
+
+            $this->assertSame($company, $employee->company);
+            $this->assertMatchesRegularExpression('/^'.$prefix.'-[1-9]\d{5}$/', $employee->employee_id);
+        }
     }
 
     public function test_hr_employee_id_creates_a_pending_account_without_email_invitation(): void
@@ -203,11 +216,12 @@ class HrManagementTest extends TestCase
             'confirmation_status' => 'probation',
         ])->assertRedirect();
 
-        $employee = Employee::where('employee_id', 'AFC-000001')->firstOrFail();
+        $employee = Employee::where('first_name', 'Grace')->firstOrFail();
         $this->assertNotNull($employee->user);
         $this->assertSame('afc_staff', $employee->user->role);
         $this->assertSame('pending', $employee->user->status);
-        $this->assertSame('afc-000001@staff.invalid', $employee->user->email);
+        $this->assertMatchesRegularExpression('/^AFC-[1-9]\d{5}$/', $employee->employee_id);
+        $this->assertSame(strtolower($employee->employee_id).'@staff.invalid', $employee->user->email);
         Mail::assertNothingOutgoing();
     }
 
