@@ -1,7 +1,8 @@
 <?php
 
+use App\Http\Middleware\AdminConsoleAccess;
 use App\Http\Middleware\EnsureStaffPasskeySession;
-use App\Http\Middleware\SuperAdminOnly;
+use App\Http\Middleware\HrAccessOnly;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -15,7 +16,8 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
-            'super_admin' => SuperAdminOnly::class,
+            'hr_access' => HrAccessOnly::class,
+            'admin.console' => AdminConsoleAccess::class,
             'staff.passkey' => EnsureStaffPasskeySession::class,
         ]);
         $rawTrustedProxies = env('TRUSTED_PROXIES', '127.0.0.1,::1');

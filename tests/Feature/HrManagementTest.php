@@ -9,6 +9,7 @@ use App\Models\HrPosition;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -25,10 +26,11 @@ class HrManagementTest extends TestCase
         ]);
     }
 
-    public function test_only_super_admin_can_access_hr_routes(): void
+    public function test_only_super_admin_and_hr_can_access_hr_routes(): void
     {
         /** @var User $admin */
         $admin = User::factory()->create(['role' => 'admin', 'status' => 'approved']);
+        $hr = User::factory()->create(['role' => 'hr', 'status' => 'approved']);
 
         $this->actingAs($admin)
             ->get(route('admin.hr.dashboard'))
@@ -37,6 +39,111 @@ class HrManagementTest extends TestCase
         $this->actingAs($this->superAdmin())
             ->get(route('admin.hr.dashboard'))
             ->assertOk();
+
+        $this->actingAs($hr)
+            ->get(route('admin.hr.dashboard'))
+            ->assertOk()
+            ->assertSee('Dashboard Overview')
+            ->assertSee('Staff Analytics & Trends', false)
+            ->assertSee('Payroll & Salary', false)
+            ->assertDontSee(route('admin.users.index'), false)
+            ->assertDontSee('Deployment Monitor');
+
+        $this->actingAs($hr)
+            ->get(route('admin.attendance.index'))
+            ->assertOk();
+
+        $this->actingAs($hr)
+            ->get(route('admin.payroll.index'))
+            ->assertOk();
+
+        $this->actingAs($hr)
+            ->get(route('admin.shifts.index'))
+            ->assertOk();
+
+        $this->actingAs($hr)
+            ->get(route('admin.users.index'))
+            ->assertForbidden();
+
+        $this->actingAs($hr)
+            ->get(route('admin.deployments.index'))
+            ->assertForbidden();
+
+        $staff = User::factory()->create(['role' => 'artsci_staff', 'status' => 'approved']);
+        $this->actingAs($staff)
+            ->get(route('admin.payroll.index'))
+            ->assertForbidden();
+
+        $this->actingAs($hr)
+            ->get(route('attendance.dashboard'))
+            ->assertOk();
+    }
+
+    public function test_hr_role_login_redirects_directly_to_hr_panel(): void
+    {
+        $hr = User::factory()->create([
+            'email' => 'hr@example.test',
+            'password' => Hash::make('HR password 123!'),
+            'role' => 'hr',
+            'status' => 'approved',
+        ]);
+
+        $this->post(route('login'), [
+            'email' => $hr->email,
+            'password' => 'HR password 123!',
+        ])->assertRedirect(route('admin.hr.dashboard'));
+
+        $this->assertAuthenticatedAs($hr);
+    }
+
+    public function test_only_super_admin_can_assign_or_manage_the_hr_role(): void
+    {
+        $superAdmin = $this->superAdmin();
+        $staff = User::factory()->create(['role' => 'admin', 'status' => 'approved']);
+        $hr = User::factory()->create(['role' => 'hr', 'status' => 'approved']);
+
+        $this->actingAs($superAdmin)
+            ->get(route('admin.users.create'))
+            ->assertOk()
+            ->assertSee('HR (HR Management Only)');
+
+        $this->actingAs($superAdmin)
+            ->put(route('admin.users.update', $staff), [
+                'name' => $staff->name,
+                'email' => $staff->email,
+                'role' => 'hr',
+                'status' => 'approved',
+                'password' => '',
+                'password_confirmation' => '',
+            ])->assertRedirect(route('admin.users.show', $staff));
+
+        $this->assertDatabaseHas('users', ['id' => $staff->id, 'role' => 'hr']);
+
+        $admin = User::factory()->create(['role' => 'admin', 'status' => 'approved']);
+        $this->actingAs($admin)
+            ->get(route('admin.users.create'))
+            ->assertOk()
+            ->assertDontSee('HR (HR Management Only)');
+
+        $this->actingAs($admin)
+            ->post(route('admin.users.store'), [
+                'name' => 'Another HR',
+                'email' => 'another.hr@example.test',
+                'password' => 'HR password 123!',
+                'password_confirmation' => 'HR password 123!',
+                'role' => 'hr',
+                'status' => 'approved',
+            ])->assertSessionHasErrors('role');
+
+        $this->actingAs($admin)
+            ->get(route('admin.users.edit', $hr))
+            ->assertForbidden();
+
+        $this->actingAs($admin)
+            ->get(route('admin.users.show', $hr))
+            ->assertOk()
+            ->assertDontSee('Change Role &amp; Edit Profile')
+            ->assertDontSee('Suspend Account');
     }
 
     public function test_super_admin_can_create_employee_and_generate_company_specific_ids(): void

@@ -34,9 +34,11 @@
         </div>
 
         <div class="flex items-center gap-2">
-            <a href="{{ route('admin.users.edit', $user) }}" class="bg-[#0f172a] hover:bg-slate-800 text-white font-bold text-xs py-2 px-3.5 rounded-lg shadow">
-                Change Role & Edit Profile
-            </a>
+            @if(!$user->isHr() || auth()->user()->isSuperAdmin())
+                <a href="{{ route('admin.users.edit', $user) }}" class="bg-[#0f172a] hover:bg-slate-800 text-white font-bold text-xs py-2 px-3.5 rounded-lg shadow">
+                    Change Role & Edit Profile
+                </a>
+            @endif
             <a href="{{ route('admin.attendance.user-history', $user) }}" class="border border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold text-xs py-2 px-3.5 rounded-lg">
                 View Full Attendance History
             </a>
@@ -47,6 +49,7 @@
     </div>
 
     <!-- Quick Status Action Bar -->
+    @if(!$user->isHr() || auth()->user()->isSuperAdmin())
     <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3">
         <span class="text-xs font-extrabold text-slate-700">Account Access Control:</span>
 
@@ -84,6 +87,7 @@
                 </form>
             @endif
         </div>
+        @endif
     </div>
 
     <!-- Punctuality Stats Matrix -->

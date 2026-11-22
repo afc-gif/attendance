@@ -9,7 +9,7 @@
     <div class="flex items-center justify-between">
         <div>
             <h1 class="text-2xl font-extrabold text-slate-900">Edit User Role & Profile</h1>
-            <p class="text-xs text-slate-500">Update role assignment (Admin, AFC Staff, ARTSCI Staff) and account status for {{ $user->name }}</p>
+            <p class="text-xs text-slate-500">Update role and account status for {{ $user->name }}</p>
         </div>
         <a href="{{ route('admin.users.show', $user) }}" class="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
             &larr; Back to Profile
@@ -37,6 +37,9 @@
                     <label class="block text-xs font-bold uppercase text-indigo-700 mb-1">User Role</label>
                     <select name="role" required class="w-full px-3 py-2.5 border-2 border-indigo-300 rounded-xl text-xs font-bold text-indigo-900 bg-indigo-50/30">
                         <option value="admin" {{ old('role', $user->role) === 'admin' ? 'selected' : '' }}>Admin (Full System Access)</option>
+                        @if(auth()->user()->isSuperAdmin())
+                            <option value="hr" {{ old('role', $user->role) === 'hr' ? 'selected' : '' }}>HR (HR Management Only)</option>
+                        @endif
                         <option value="afc_staff" {{ old('role', $user->role) === 'afc_staff' ? 'selected' : '' }}>AFC Staff</option>
                         <option value="artsci_staff" {{ old('role', $user->role) === 'artsci_staff' ? 'selected' : '' }}>ARTSCI Staff</option>
                     </select>

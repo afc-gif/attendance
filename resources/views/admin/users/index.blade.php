@@ -9,7 +9,7 @@
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
             <h1 class="text-2xl font-extrabold text-slate-900">User Management</h1>
-            <p class="text-xs text-slate-500">Manage employee accounts, assign roles (Admin, AFC Staff, ARTSCI Staff), approve pending staff, and control system access</p>
+            <p class="text-xs text-slate-500">Manage employee accounts, assign roles, approve pending staff, and control system access</p>
         </div>
 
         <a href="{{ route('admin.users.create') }}" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl shadow flex items-center gap-2">
@@ -61,6 +61,9 @@
             <select name="role" onchange="this.form.submit()" class="px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-700">
                 <option value="">All Roles</option>
                 <option value="admin" {{ $roleFilter === 'admin' ? 'selected' : '' }}>Admin</option>
+                @if(auth()->user()->isSuperAdmin())
+                    <option value="hr" {{ $roleFilter === 'hr' ? 'selected' : '' }}>HR</option>
+                @endif
                 <option value="afc_staff" {{ $roleFilter === 'afc_staff' ? 'selected' : '' }}>AFC Staff</option>
                 <option value="artsci_staff" {{ $roleFilter === 'artsci_staff' ? 'selected' : '' }}>ARTSCI Staff</option>
             </select>
@@ -135,9 +138,11 @@
                             </td>
                             <td class="p-3.5 text-right space-x-2">
                                 <a href="{{ route('admin.users.show', $u) }}" class="text-xs font-bold text-indigo-600 hover:text-indigo-800">View</a>
-                                <a href="{{ route('admin.users.edit', $u) }}" class="text-xs font-bold text-slate-600 hover:text-slate-900 border border-slate-300 px-2 py-1 rounded">Edit Role</a>
+                                @if(!$u->isHr() || auth()->user()->isSuperAdmin())
+                                    <a href="{{ route('admin.users.edit', $u) }}" class="text-xs font-bold text-slate-600 hover:text-slate-900 border border-slate-300 px-2 py-1 rounded">Edit Role</a>
+                                @endif
 
-                                @if($u->id !== auth()->id())
+                                @if($u->id !== auth()->id() && (!$u->isHr() || auth()->user()->isSuperAdmin()))
                                     <form method="POST" action="{{ route('admin.users.destroy', $u) }}" class="inline" onsubmit="return confirm('Permanently delete {{ addslashes($u->name) }} account?');">
                                         @csrf
                                         @method('DELETE')

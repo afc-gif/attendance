@@ -30,7 +30,7 @@
     </section>
 
     <details class="mt-7 border-t border-slate-100 pt-4">
-        <summary class="cursor-pointer text-xs font-bold text-slate-600">Administrator sign-in</summary>
+        <summary class="cursor-pointer text-xs font-bold text-slate-600">Administrator / HR sign-in</summary>
         <form method="POST" action="{{ route('login') }}" class="space-y-3 mt-4">
             @csrf
             <label for="email" class="block text-xs font-bold uppercase tracking-wider text-slate-700">Email Address</label>

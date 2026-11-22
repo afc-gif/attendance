@@ -99,6 +99,11 @@ class User extends Authenticatable implements PasskeyUser
         return in_array($this->role, ['admin', 'super_admin', 'manager', 'executive'], true);
     }
 
+    public function canAccessAdminConsole(): bool
+    {
+        return $this->isAdmin() || $this->isHr();
+    }
+
     public function isAfcStaff(): bool
     {
         return $this->role === 'afc_staff';
@@ -107,6 +112,11 @@ class User extends Authenticatable implements PasskeyUser
     public function isSuperAdmin(): bool
     {
         return $this->role === 'super_admin';
+    }
+
+    public function isHr(): bool
+    {
+        return $this->role === 'hr';
     }
 
     public function hrEmployee()
@@ -143,6 +153,7 @@ class User extends Authenticatable implements PasskeyUser
     {
         return match ($this->role) {
             'admin' => 'Admin',
+            'hr' => 'HR',
             'afc_staff' => 'AFC Staff',
             'artsci_staff' => 'ARTSCI Staff',
             default => ucfirst(str_replace('_', ' ', $this->role)),
