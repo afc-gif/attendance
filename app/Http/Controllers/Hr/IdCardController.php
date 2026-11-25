@@ -21,24 +21,26 @@ class IdCardController extends Controller
     public function preview(Employee $employee)
     {
         $this->validateCardRequirements($employee);
-        $employee->load(['department', 'position']);
+        $employee->load(['department', 'position', 'emergencyContacts']);
 
         return view('admin.hr.employees.id-card-preview', [
             'employee' => $employee,
             'branding' => $this->branding($employee),
             'photoDataUri' => $this->photoDataUri($employee),
+            ...$this->emergencyContact($employee),
         ]);
     }
 
     public function downloadPdf(Employee $employee): Response
     {
         $this->validateCardRequirements($employee);
-        $employee->load(['department', 'position']);
+        $employee->load(['department', 'position', 'emergencyContacts']);
 
         $html = view('admin.hr.employees.id-card-pdf', [
             'employee' => $employee,
             'branding' => $this->branding($employee),
             'photoDataUri' => $this->photoDataUri($employee),
+            ...$this->emergencyContact($employee),
         ])->render();
 
         $options = new Options;
@@ -114,6 +116,16 @@ class IdCardController extends Controller
         $mime = $employee->passport_photo_mime ?: 'image/jpeg';
 
         return 'data:'.$mime.';base64,'.base64_encode($disk->get($employee->passport_photo_path));
+    }
+
+    protected function emergencyContact(Employee $employee): array
+    {
+        $contact = $employee->emergencyContacts->firstWhere('is_primary', true);
+
+        return [
+            'emergencyContactName' => $contact?->name ?: ($employee->emergency_contact_name ?: $employee->next_of_kin),
+            'emergencyContactPhone' => $contact?->phone ?: ($employee->emergency_contact_phone ?: $employee->next_of_kin_phone),
+        ];
     }
 
     protected function assetDataUri(string $path, string $fallbackMime): string

@@ -404,7 +404,12 @@ class HrManagementTest extends TestCase
 
         foreach (['ARTSCI', 'AFC'] as $company) {
             $employee = $this->createCardEligibleEmployee($company);
-            $employee->update(['passport_photo_path' => 'hr/employees/'.$employee->employee_id.'/passport/test.png']);
+            $employee->update([
+                'passport_photo_path' => 'hr/employees/'.$employee->employee_id.'/passport/test.png',
+                'emergency_contact_name' => 'Grace Johnson',
+                'emergency_contact_phone' => '+234 800 123 4567',
+                'employment_date' => '2024-01-22',
+            ]);
             Storage::disk('local')->put($employee->passport_photo_path, $png);
 
             $this->actingAs($superAdmin)
@@ -415,12 +420,20 @@ class HrManagementTest extends TestCase
                 ->get(route('admin.hr.employees.id-card.preview', $employee))
                 ->assertOk()
                 ->assertSee($employee->full_name)
-                ->assertSee($employee->employee_id);
+                ->assertSee($employee->employee_id)
+                ->assertSee('Front')
+                ->assertSee('Back')
+                ->assertSee('EMERGENCY CONTACT')
+                ->assertSee('Grace Johnson')
+                ->assertSee('+234 800 123 4567')
+                ->assertSee($company);
 
-            $this->actingAs($superAdmin)
+            $pdfResponse = $this->actingAs($superAdmin)
                 ->get(route('admin.hr.employees.id-card.download', $employee))
                 ->assertOk()
                 ->assertHeader('content-type', 'application/pdf');
+
+            $this->assertSame(2, preg_match_all('/\/Type\s*\/Page\b/', $pdfResponse->getContent()));
         }
     }
 

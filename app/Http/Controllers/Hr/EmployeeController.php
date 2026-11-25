@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -152,7 +153,7 @@ class EmployeeController extends Controller
         /** @var UploadedFile $file */
         $file = $validated['passport_photo'];
 
-	if (! $file->isValid()) {
+        if (! $file->isValid()) {
             return back()->withErrors([
                 'passport_photo' => 'The upload failed. Please select the photograph again.',
             ]);
@@ -161,7 +162,7 @@ class EmployeeController extends Controller
         $imagePath = $file->getPathname();
 
         if (! $imagePath || ! is_file($imagePath) || ! is_readable($imagePath)) {
-            \Log::error('HR passport upload temporary file unavailable', [
+            Log::error('HR passport upload temporary file unavailable', [
                 'employee_id' => $employee->employee_id,
                 'upload_error' => $file->getError(),
                 'temporary_path' => $imagePath,
