@@ -57,6 +57,31 @@
                     </form>
                 @endif
             </div>
+            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
+                <div>
+                    <h2 class="font-extrabold text-sm">Employee ID Card Signature</h2>
+                    <p class="mt-1 text-[11px] text-slate-500">Upload the employee’s signature image. It is stored privately and printed on the ID card.</p>
+                </div>
+                @if($employee->id_card_signature_path)
+                    <p class="text-[11px] text-emerald-700 font-bold">Employee signature on file</p>
+                @else
+                    <p class="text-[11px] text-amber-700 font-bold">No employee signature uploaded</p>
+                @endif
+                <form method="POST" action="{{ route('admin.hr.employees.signature.upload', $employee) }}" enctype="multipart/form-data" class="space-y-2">
+                    @csrf
+                    <label class="block text-[11px] font-bold text-slate-600">Transparent PNG or JPG
+                        <input type="file" name="signature" accept=".jpg,.jpeg,.png,image/jpeg,image/png" required class="mt-1 block w-full text-xs">
+                    </label>
+                    <button class="w-full bg-indigo-600 text-white rounded-lg px-3 py-2 text-xs font-bold">{{ $employee->id_card_signature_path ? 'Replace Signature' : 'Upload Signature' }}</button>
+                </form>
+                @if($employee->id_card_signature_path)
+                    <form method="POST" action="{{ route('admin.hr.employees.signature.destroy', $employee) }}" onsubmit="return confirm('Remove this employee signature?')">
+                        @csrf
+                        @method('DELETE')
+                        <button class="w-full bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2 text-xs font-bold">Remove Signature</button>
+                    </form>
+                @endif
+            </div>
             <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm text-xs space-y-3">
                 <h2 class="font-extrabold text-sm">Employment</h2>
                 <div class="flex justify-between"><span class="text-slate-400">Department</span><strong>{{ $employee->department?->name ?? '—' }}</strong></div>

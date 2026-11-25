@@ -6,6 +6,7 @@ use App\Models\Employee;
 use App\Models\EmployeeDocument;
 use App\Models\HrDepartment;
 use App\Models\HrPosition;
+use App\Models\HrSetting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -413,6 +414,26 @@ class HrManagementTest extends TestCase
             Storage::disk('local')->put($employee->passport_photo_path, $png);
 
             $this->actingAs($superAdmin)
+                ->post(route('admin.hr.employees.signature.upload', $employee), [
+                    'signature' => UploadedFile::fake()->createWithContent('staff-signature.png', $png),
+                ])->assertRedirect();
+
+            $this->actingAs($superAdmin)
+                ->post(route('admin.hr.settings.id-card-signature.upload', $company), [
+                    'signature' => UploadedFile::fake()->createWithContent('hr-signature.png', $png),
+                ])->assertRedirect();
+
+            $employee->refresh();
+            $hrSignaturePath = HrSetting::getValue('id_card_hr_signature_'.$company);
+            $this->assertTrue(Storage::disk('local')->exists($employee->id_card_signature_path));
+            $this->assertTrue(Storage::disk('local')->exists($hrSignaturePath));
+
+            $this->actingAs($superAdmin)
+                ->get(route('admin.hr.settings.index'))
+                ->assertOk()
+                ->assertSee('data:image/png;base64,', false);
+
+            $this->actingAs($superAdmin)
                 ->post(route('admin.hr.employees.id-card.generate', $employee))
                 ->assertRedirect(route('admin.hr.employees.id-card.preview', $employee));
 
@@ -426,6 +447,10 @@ class HrManagementTest extends TestCase
                 ->assertSee('EMERGENCY CONTACT')
                 ->assertSee('Grace Johnson')
                 ->assertSee('+234 800 123 4567')
+                ->assertSee($company === 'ARTSCI' ? 'BRINGING . DESIGNING . SCIENCE' : 'FRESHLY CRAFTED SIMPLY DELICIOUS')
+                ->assertSee($company === 'ARTSCI' ? 'www.artsci.com.ng' : 'www.afc.com.ng')
+                ->assertSee('Location')
+                ->assertSee('Date of employment')
                 ->assertSee($company);
 
             $pdfResponse = $this->actingAs($superAdmin)

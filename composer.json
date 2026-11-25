@@ -8,6 +8,7 @@
     "require": {
         "php": "^8.3",
         "dompdf/dompdf": "^3.1",
+        "endroid/qr-code": "^5.1",
         "laravel/framework": "^13.8",
         "laravel/passkeys": "^0.3",
         "laravel/tinker": "^3.0"

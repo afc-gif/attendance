@@ -124,6 +124,8 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/employees/{employee}/passport-photo', [EmployeeController::class, 'uploadPassportPhoto'])->name('employees.passport.upload');
         Route::delete('/employees/{employee}/passport-photo', [EmployeeController::class, 'deletePassportPhoto'])->name('employees.passport.destroy');
         Route::get('/employees/{employee}/passport-photo', [EmployeeController::class, 'passportPhoto'])->name('employees.passport.show');
+        Route::post('/employees/{employee}/id-card-signature', [EmployeeController::class, 'uploadIdCardSignature'])->name('employees.signature.upload');
+        Route::delete('/employees/{employee}/id-card-signature', [EmployeeController::class, 'deleteIdCardSignature'])->name('employees.signature.destroy');
 
         Route::post('/employees/{employee}/id-card/generate', [IdCardController::class, 'generate'])->name('employees.id-card.generate');
         Route::get('/employees/{employee}/id-card', [IdCardController::class, 'preview'])->name('employees.id-card.preview');
@@ -148,5 +150,11 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/reports/export', [ReportController::class, 'export'])->name('reports.export');
         Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
         Route::put('/settings', [SettingController::class, 'update'])->name('settings.update');
+        Route::post('/settings/id-card-signature/{company}', [SettingController::class, 'uploadIdCardHrSignature'])
+            ->where('company', 'ARTSCI|AFC')
+            ->name('settings.id-card-signature.upload');
+        Route::delete('/settings/id-card-signature/{company}', [SettingController::class, 'deleteIdCardHrSignature'])
+            ->where('company', 'ARTSCI|AFC')
+            ->name('settings.id-card-signature.destroy');
     });
 });

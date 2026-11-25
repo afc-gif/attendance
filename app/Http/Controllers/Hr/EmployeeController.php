@@ -226,6 +226,52 @@ class EmployeeController extends Controller
         return back()->with('success', 'Passport photograph removed.');
     }
 
+    public function uploadIdCardSignature(Request $request, Employee $employee)
+    {
+        $validated = $request->validate([
+            'signature' => ['required', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
+        ]);
+
+        /** @var UploadedFile $file */
+        $file = $validated['signature'];
+
+        if (! $file->isValid()) {
+            return back()->withErrors([
+                'signature' => 'The signature upload failed. Please select the image again.',
+            ]);
+        }
+
+        $extension = $file->getMimeType() === 'image/png' ? 'png' : 'jpg';
+        $directory = 'hr/id-card-signatures/employees/'.$employee->employee_id;
+        $oldPath = $employee->id_card_signature_path;
+        $storedPath = $file->storeAs($directory, Str::uuid()->toString().'.'.$extension, 'local');
+
+        if (! $storedPath) {
+            throw new \RuntimeException('Unable to store employee ID card signature.');
+        }
+
+        $employee->update(['id_card_signature_path' => $storedPath]);
+
+        if ($oldPath && $oldPath !== $storedPath) {
+            Storage::disk('local')->delete($oldPath);
+        }
+
+        return back()->with('success', 'Employee ID card signature saved.');
+    }
+
+    public function deleteIdCardSignature(Employee $employee)
+    {
+        $oldPath = $employee->id_card_signature_path;
+
+        if ($oldPath) {
+            Storage::disk('local')->delete($oldPath);
+        }
+
+        $employee->update(['id_card_signature_path' => null]);
+
+        return back()->with('success', 'Employee ID card signature removed.');
+    }
+
     public function passportPhoto(Employee $employee): Response
     {
         $path = $employee->passport_photo_path;
