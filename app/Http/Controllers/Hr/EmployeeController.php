@@ -151,7 +151,29 @@ class EmployeeController extends Controller
 
         /** @var UploadedFile $file */
         $file = $validated['passport_photo'];
-        $imageInfo = @getimagesize($file->getRealPath());
+
+	if (! $file->isValid()) {
+            return back()->withErrors([
+                'passport_photo' => 'The upload failed. Please select the photograph again.',
+            ]);
+        }
+
+        $imagePath = $file->getPathname();
+
+        if (! $imagePath || ! is_file($imagePath) || ! is_readable($imagePath)) {
+            \Log::error('HR passport upload temporary file unavailable', [
+                'employee_id' => $employee->employee_id,
+                'upload_error' => $file->getError(),
+                'temporary_path' => $imagePath,
+            ]);
+
+            return back()->withErrors([
+                'passport_photo' => 'The uploaded photograph could not be read. Please try again.',
+            ]);
+        }
+
+        $imageInfo = @getimagesize($imagePath);
+
         $allowedMimeTypes = ['image/jpeg', 'image/png'];
 
         if (! $imageInfo || ! in_array($imageInfo['mime'] ?? null, $allowedMimeTypes, true)) {
@@ -162,7 +184,11 @@ class EmployeeController extends Controller
         $extension = $mime === 'image/jpeg' ? 'jpg' : 'png';
         $directory = 'hr/employees/'.$employee->employee_id.'/passport';
         $oldPath = $employee->passport_photo_path;
-        $storedName = $file->storeAs($directory, Str::uuid()->toString().'.'.$extension, 'local');
+        $storedName = Storage::disk('local')->putFileAs(
+            $directory,
+            $imagePath,
+            Str::uuid()->toString().'.'.$extension
+        );
 
         if (! $storedName) {
             throw new \RuntimeException('Unable to store passport photograph.');
