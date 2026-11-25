@@ -414,6 +414,22 @@ class HrManagementTest extends TestCase
             Storage::disk('local')->put($employee->passport_photo_path, $png);
 
             $this->actingAs($superAdmin)
+                ->post(route('admin.hr.employees.id-card.generate', $employee))
+                ->assertRedirect(route('admin.hr.employees.id-card.preview', $employee));
+
+            $this->actingAs($superAdmin)
+                ->get(route('admin.hr.employees.id-card.preview', $employee))
+                ->assertOk()
+                ->assertDontSee('src=""', false);
+
+            $pdfResponse = $this->actingAs($superAdmin)
+                ->get(route('admin.hr.employees.id-card.download', $employee))
+                ->assertOk()
+                ->assertHeader('content-type', 'application/pdf');
+
+            $this->assertSame(2, preg_match_all('/\/Type\s*\/Page\b/', $pdfResponse->getContent()));
+
+            $this->actingAs($superAdmin)
                 ->post(route('admin.hr.employees.signature.upload', $employee), [
                     'signature' => UploadedFile::fake()->createWithContent('staff-signature.png', $png),
                 ])->assertRedirect();
@@ -434,10 +450,6 @@ class HrManagementTest extends TestCase
                 ->assertSee('data:image/png;base64,', false);
 
             $this->actingAs($superAdmin)
-                ->post(route('admin.hr.employees.id-card.generate', $employee))
-                ->assertRedirect(route('admin.hr.employees.id-card.preview', $employee));
-
-            $this->actingAs($superAdmin)
                 ->get(route('admin.hr.employees.id-card.preview', $employee))
                 ->assertOk()
                 ->assertSee($employee->full_name)
@@ -452,13 +464,6 @@ class HrManagementTest extends TestCase
                 ->assertSee('Location')
                 ->assertSee('Date of employment')
                 ->assertSee($company);
-
-            $pdfResponse = $this->actingAs($superAdmin)
-                ->get(route('admin.hr.employees.id-card.download', $employee))
-                ->assertOk()
-                ->assertHeader('content-type', 'application/pdf');
-
-            $this->assertSame(2, preg_match_all('/\/Type\s*\/Page\b/', $pdfResponse->getContent()));
         }
     }
 

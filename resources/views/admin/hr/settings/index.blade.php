@@ -14,7 +14,7 @@
     <section class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
         <div>
             <h2 class="font-extrabold text-sm text-slate-900">ID Card HR Signatures</h2>
-            <p class="mt-1 text-xs text-slate-500">Each company signature is stored privately and appears on the front of that company’s employee cards.</p>
+            <p class="mt-1 text-xs text-slate-500">Company signatures are optional. Uploaded signatures are stored privately and appear on the front of that company’s employee cards.</p>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
             @foreach(['ARTSCI', 'AFC'] as $company)

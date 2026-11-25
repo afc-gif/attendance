@@ -60,7 +60,7 @@
             <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
                 <div>
                     <h2 class="font-extrabold text-sm">Employee ID Card Signature</h2>
-                    <p class="mt-1 text-[11px] text-slate-500">Upload the employee’s signature image. It is stored privately and printed on the ID card.</p>
+                    <p class="mt-1 text-[11px] text-slate-500">Optional: upload the employee’s signature to store it privately and print it on the ID card.</p>
                 </div>
                 @if($employee->id_card_signature_path)
                     <p class="text-[11px] text-emerald-700 font-bold">Employee signature on file</p>

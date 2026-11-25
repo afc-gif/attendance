@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Hr;
 use App\Http\Controllers\Controller;
 use App\Models\HrSetting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -51,7 +52,7 @@ class SettingController extends Controller
         abort_unless(in_array($company, ['ARTSCI', 'AFC'], true), 404);
 
         $validated = $request->validate([
-            'signature' => ['required', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
+            'signature' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
         ]);
         $file = $validated['signature'];
 
@@ -61,13 +62,36 @@ class SettingController extends Controller
             ]);
         }
 
-        $extension = $file->getMimeType() === 'image/png' ? 'png' : 'jpg';
+        $imagePath = $file->getPathname();
+
+        if (! $imagePath || ! is_file($imagePath) || ! is_readable($imagePath)) {
+            Log::error('HR company signature temporary file unavailable', [
+                'company' => $company,
+                'upload_error' => $file->getError(),
+                'temporary_path' => $imagePath,
+            ]);
+
+            return back()->withErrors([
+                'signature' => 'The uploaded signature could not be read. Please try again.',
+            ]);
+        }
+
+        $imageInfo = @getimagesize($imagePath);
+        $mime = $imageInfo['mime'] ?? null;
+
+        if (! in_array($mime, ['image/jpeg', 'image/png'], true)) {
+            return back()->withErrors([
+                'signature' => 'The signature must be a valid JPG or PNG image.',
+            ]);
+        }
+
+        $extension = $mime === 'image/jpeg' ? 'jpg' : 'png';
         $settingKey = $this->hrSignatureSettingKey($company);
         $oldPath = HrSetting::getValue($settingKey);
-        $storedPath = $file->storeAs(
+        $storedPath = Storage::disk('local')->putFileAs(
             'hr/id-card-signatures/hr/'.$company,
+            $imagePath,
             Str::uuid()->toString().'.'.$extension,
-            'local'
         );
 
         if (! $storedPath) {

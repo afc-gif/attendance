@@ -199,11 +199,19 @@
                 <div class="qr-caption">Scan for {{ $branding['name'] }} website</div>
                 <div class="signature-area">
                     <div class="signature-box">
-                        <img src="{{ $employeeSignatureDataUri }}" alt="Employee signature" class="signature-image">
+                        @if($employeeSignatureDataUri)
+                            <img src="{{ $employeeSignatureDataUri }}" alt="Employee signature" class="signature-image">
+                        @else
+                            <div class="signature-image"></div>
+                        @endif
                         <div class="signature-label">STAFF SIGNATURE</div>
                     </div>
                     <div class="signature-box">
-                        <img src="{{ $hrSignatureDataUri }}" alt="HR signature" class="signature-image">
+                        @if($hrSignatureDataUri)
+                            <img src="{{ $hrSignatureDataUri }}" alt="HR signature" class="signature-image">
+                        @else
+                            <div class="signature-image"></div>
+                        @endif
                         <div class="signature-label">HR SIGNATURE</div>
                     </div>
                 </div>

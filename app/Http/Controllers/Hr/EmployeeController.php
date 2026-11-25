@@ -229,7 +229,7 @@ class EmployeeController extends Controller
     public function uploadIdCardSignature(Request $request, Employee $employee)
     {
         $validated = $request->validate([
-            'signature' => ['required', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
+            'signature' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
         ]);
 
         /** @var UploadedFile $file */
@@ -241,10 +241,37 @@ class EmployeeController extends Controller
             ]);
         }
 
-        $extension = $file->getMimeType() === 'image/png' ? 'png' : 'jpg';
+        $imagePath = $file->getPathname();
+
+        if (! $imagePath || ! is_file($imagePath) || ! is_readable($imagePath)) {
+            Log::error('HR employee signature temporary file unavailable', [
+                'employee_id' => $employee->employee_id,
+                'upload_error' => $file->getError(),
+                'temporary_path' => $imagePath,
+            ]);
+
+            return back()->withErrors([
+                'signature' => 'The uploaded signature could not be read. Please try again.',
+            ]);
+        }
+
+        $imageInfo = @getimagesize($imagePath);
+        $mime = $imageInfo['mime'] ?? null;
+
+        if (! in_array($mime, ['image/jpeg', 'image/png'], true)) {
+            return back()->withErrors([
+                'signature' => 'The signature must be a valid JPG or PNG image.',
+            ]);
+        }
+
+        $extension = $mime === 'image/jpeg' ? 'jpg' : 'png';
         $directory = 'hr/id-card-signatures/employees/'.$employee->employee_id;
         $oldPath = $employee->id_card_signature_path;
-        $storedPath = $file->storeAs($directory, Str::uuid()->toString().'.'.$extension, 'local');
+        $storedPath = Storage::disk('local')->putFileAs(
+            $directory,
+            $imagePath,
+            Str::uuid()->toString().'.'.$extension
+        );
 
         if (! $storedPath) {
             throw new \RuntimeException('Unable to store employee ID card signature.');

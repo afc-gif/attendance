@@ -72,15 +72,6 @@ class IdCardController extends Controller
         } elseif (! Storage::disk('local')->exists($employee->passport_photo_path)) {
             $missing[] = 'valid passport photograph file';
         }
-        if (! $employee->id_card_signature_path || ! Storage::disk('local')->exists($employee->id_card_signature_path)) {
-            $missing[] = 'employee signature';
-        }
-
-        $hrSignaturePath = HrSetting::getValue($this->hrSignatureSettingKey($employee->company));
-        if (! $hrSignaturePath || ! Storage::disk('local')->exists($hrSignaturePath)) {
-            $missing[] = 'company HR signature';
-        }
-
         if ($missing !== []) {
             abort(422, 'Cannot generate ID card. Missing: '.implode(', ', $missing).'.');
         }
