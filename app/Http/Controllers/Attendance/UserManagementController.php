@@ -8,6 +8,7 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 
@@ -222,7 +223,23 @@ class UserManagementController extends Controller
         }
 
         $name = $user->name;
-        $user->delete();
+
+        DB::transaction(function () use ($user): void {
+            DB::table('attendance_audit_logs')
+                ->where(function ($query) use ($user) {
+                    $query->where('actor_id', $user->id)
+                        ->orWhere('affected_user_id', $user->id);
+                })
+                ->whereNotNull('attendance_record_id')
+                ->whereNotExists(function ($query) {
+                    $query->selectRaw('1')
+                        ->from('attendance_records')
+                        ->whereColumn('attendance_records.id', 'attendance_audit_logs.attendance_record_id');
+                })
+                ->update(['attendance_record_id' => null]);
+
+            $user->delete();
+        });
 
         return redirect()->route('admin.users.index')->with('success', "User account for {$name} has been permanently deleted.");
     }

@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -82,6 +83,56 @@ class AttendanceFeatureTest extends TestCase
             'is_active' => true,
             'approval_status' => $approvalStatus,
             'registered_at' => now(),
+        ]);
+    }
+
+    public function test_admin_can_delete_user_with_linked_staff_data(): void
+    {
+        $admin = $this->createAdmin();
+        $staff = $this->createUser();
+        $employee = $staff->hrEmployee;
+        $credential = $staff->attendanceCredentials()->firstOrFail();
+        $record = AttendanceRecord::create([
+            'user_id' => $staff->id,
+            'attendance_date' => Carbon::today()->toDateString(),
+            'check_in_at' => now(),
+            'status' => 'present',
+            'check_in_credential_id' => $credential->id,
+        ]);
+        $staff->getOrCreateStaffProfile();
+        $staff->passkeys()->create([
+            'name' => 'Staff phone',
+            'credential_id' => 'passkey-delete-test',
+            'credential' => [],
+        ]);
+        DB::statement('PRAGMA defer_foreign_keys = ON');
+        $auditLogId = DB::table('attendance_audit_logs')->insertGetId([
+            'event_type' => 'user_delete_test',
+            'actor_id' => $admin->id,
+            'affected_user_id' => $staff->id,
+            'attendance_record_id' => 999999,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->delete(route('admin.users.destroy', $staff))
+            ->assertRedirect(route('admin.users.index'));
+
+        $this->assertDatabaseMissing('users', ['id' => $staff->id]);
+        $this->assertDatabaseMissing('attendance_credentials', ['id' => $credential->id]);
+        $this->assertDatabaseMissing('attendance_records', ['id' => $record->id]);
+        $this->assertDatabaseMissing('staff_profiles', ['user_id' => $staff->id]);
+        $this->assertDatabaseMissing('passkeys', ['user_id' => $staff->id]);
+        $this->assertDatabaseHas('attendance_audit_logs', [
+            'id' => $auditLogId,
+            'actor_id' => $admin->id,
+            'affected_user_id' => null,
+            'attendance_record_id' => null,
+        ]);
+        $this->assertDatabaseHas('employees', [
+            'id' => $employee->id,
+            'user_id' => null,
         ]);
     }
 
